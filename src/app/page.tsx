@@ -3,12 +3,6 @@ import Link from 'next/link';
 import { Film, Swords, Calendar, HelpCircle, Sparkles, Trophy, Clapperboard, Star } from 'lucide-react';
 
 export default function HomePage() {
-  const todayStr = new Date().toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
   return (
     <div className="w-full space-y-10 py-4 animate-fade-in">
       {/* Hero Section */}
@@ -39,7 +33,7 @@ export default function HomePage() {
             className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-base shadow-xl shadow-amber-500/25 transition-all duration-200 hover:scale-[1.02] flex items-center justify-center space-x-2"
           >
             <Film className="w-5 h-5" />
-            <span>Play Today's Movie ({todayStr})</span>
+            <span>Play Today's Movie</span>
           </Link>
 
           <Link
