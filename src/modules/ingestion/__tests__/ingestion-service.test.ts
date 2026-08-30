@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ingestionService } from '../ingestion-service';
 import { tmdbAdapter } from '@/infrastructure/external-sources/tmdb-adapter';
 import { movieRepository } from '@/modules/movies/movie-repository';
+import { prisma } from '@/infrastructure/db/client';
 
 describe('Ingestion Service & Historical Discovery', () => {
   it('discovers historical Telugu and Hindi movies for 2002-2026', async () => {
@@ -27,7 +28,18 @@ describe('Ingestion Service & Historical Discovery', () => {
     expect(Array.isArray(altTitles)).toBe(true);
   });
 
-  it('correctly searches newly ingested movies by title', async () => {
+  it('correctly ingests and searches movies by title', async () => {
+    await ingestionService.discoverYear('te', 2002);
+    const candidate = await prisma.ingestionCandidate.findFirst({
+      where: { sourceMovieId: '200201' },
+    });
+    expect(candidate).toBeDefined();
+
+    if (candidate) {
+      const processRes = await ingestionService.processCandidate(candidate.id);
+      expect(processRes.status).toMatch(/PROCESSED|REVIEW_REQUIRED/);
+    }
+
     const results = await movieRepository.search('Indra');
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].primaryTitle).toBe('Indra');
