@@ -181,14 +181,63 @@ export class AdminService {
   }
 
   async getSystemOverview() {
-    const movieCount = await prisma.movie.count({ where: { lifecycleStatus: 'ACTIVE' } });
+    const totalMovies = await prisma.movie.count();
+    const activeMovies = await prisma.movie.count({ where: { lifecycleStatus: 'ACTIVE' } });
+    
+    const playableGuesses = await prisma.movie.count({
+      where: {
+        lifecycleStatus: 'ACTIVE',
+        eligibility: { playableAsGuess: true },
+      },
+    });
+
+    const playableTargets = await prisma.movie.count({
+      where: {
+        lifecycleStatus: 'ACTIVE',
+        eligibility: { playableAsTarget: true },
+      },
+    });
+
+    const playableBoth = await prisma.movie.count({
+      where: {
+        lifecycleStatus: 'ACTIVE',
+        eligibility: {
+          playableAsGuess: true,
+          playableAsTarget: true,
+        },
+      },
+    });
+
+    const blockedGuesses = await prisma.movie.count({
+      where: {
+        OR: [
+          { lifecycleStatus: { not: 'ACTIVE' } },
+          { eligibility: { playableAsGuess: false } },
+        ],
+      },
+    });
+
+    const blockedTargets = await prisma.movie.count({
+      where: {
+        OR: [
+          { lifecycleStatus: { not: 'ACTIVE' } },
+          { eligibility: { playableAsTarget: false } },
+        ],
+      },
+    });
+
+    const needsReview = await prisma.gameEligibility.count({
+      where: { reviewStatus: 'PENDING' },
+    });
+
+    const approvedCount = await prisma.gameEligibility.count({
+      where: { reviewStatus: 'APPROVED' },
+    });
+
     const gamesPlayed = await prisma.gameSession.count();
     const gamesWon = await prisma.gameSession.count({ where: { status: 'WON' } });
     const queueStats = queueService.getQueueStats();
     const candidateCount = await prisma.ingestionCandidate.count();
-    const pendingReviewCount = await prisma.gameEligibility.count({
-      where: { reviewStatus: 'PENDING' },
-    });
 
     const upcomingPuzzlesCount = await prisma.dailyPuzzle.count({
       where: {
@@ -197,13 +246,20 @@ export class AdminService {
     });
 
     return {
-      movieCount,
+      totalMovies,
+      activeMovies,
+      playableGuesses,
+      playableTargets,
+      playableBoth,
+      blockedGuesses,
+      blockedTargets,
+      needsReview,
+      approvedCount,
       gamesPlayed,
       gamesWon,
       winRate: gamesPlayed > 0 ? ((gamesWon / gamesPlayed) * 100).toFixed(1) + '%' : '0%',
       queueStats,
       candidateCount,
-      pendingReviewCount,
       upcomingPuzzlesCount,
       puzzleSafetyStatus: upcomingPuzzlesCount >= 3 ? 'HEALTHY' : 'WARNING',
     };

@@ -29,17 +29,9 @@ export default function Navbar() {
               </div>
             </div>
             <div>
-              <div className="flex items-center space-x-1.5">
-                <span className="font-extrabold text-lg sm:text-xl tracking-tight bg-gradient-to-r from-amber-400 via-amber-200 to-yellow-400 bg-clip-text text-transparent">
-                  AAta Chusthava
-                </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                  Movie Game
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 hidden sm:block">
-                Tollywood & Bollywood Movie Deduction
-              </p>
+              <span className="font-extrabold text-lg sm:text-xl tracking-tight bg-gradient-to-r from-amber-400 via-amber-200 to-yellow-400 bg-clip-text text-transparent">
+                AAta Chusthava
+              </span>
             </div>
           </Link>
 
