@@ -156,14 +156,41 @@ export class IngestionService {
         where: { tmdbId: details.id },
       });
 
+      if (!movie) {
+        // Match against existing movies by slug or exact title + year
+        const existingBySlug = await prisma.movie.findUnique({
+          where: { slug },
+        });
+
+        const existingByTitleYear = await prisma.movie.findFirst({
+          where: {
+            primaryTitle: { equals: details.title, mode: 'insensitive' },
+            releaseYear,
+          },
+        });
+
+        movie = existingBySlug || existingByTitleYear;
+
+        if (movie && !movie.tmdbId) {
+          movie = await prisma.movie.update({
+            where: { id: movie.id },
+            data: { tmdbId: details.id },
+          });
+        }
+      }
+
       const posterAsset = details.poster_path
-        ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
+        ? details.poster_path.startsWith('http')
+          ? details.poster_path
+          : `https://image.tmdb.org/t/p/w500${details.poster_path}`
         : null;
       const backdropAsset = details.backdrop_path
-        ? `https://image.tmdb.org/t/p/w1280${details.backdrop_path}`
+        ? details.backdrop_path.startsWith('http')
+          ? details.backdrop_path
+          : `https://image.tmdb.org/t/p/w1280${details.backdrop_path}`
         : null;
 
-      const boxOffice = details.revenue && details.revenue > 0 ? details.revenue * 83 : null; // approx INR conversion if in USD
+      const boxOffice = details.revenue && details.revenue > 0 ? details.revenue : null;
       const boxOfficeStatus = boxOffice ? 'REPORTED' : 'UNKNOWN';
 
       if (!movie) {
@@ -181,7 +208,7 @@ export class IngestionService {
             canonicalIndiaReleaseDate: details.release_date
               ? new Date(details.release_date)
               : null,
-            budget: details.budget && details.budget > 0 ? details.budget * 83 : null,
+            budget: details.budget && details.budget > 0 ? details.budget : null,
             boxOffice,
             boxOfficeStatus,
             rating: details.vote_average || null,
@@ -196,15 +223,27 @@ export class IngestionService {
 
       // 4. Ingest Genres
       for (const g of details.genres) {
-        const genreRecord = await prisma.genre.upsert({
-          where: { tmdbId: g.id },
-          create: {
-            tmdbId: g.id,
-            canonicalName: g.name,
-            slug: g.name.toLowerCase().replace(/[^\w]/g, '-'),
-          },
-          update: { canonicalName: g.name },
-        });
+        const slug = g.name.toLowerCase().replace(/[^\w]/g, '-');
+        let genreRecord = g.id ? await prisma.genre.findUnique({ where: { tmdbId: g.id } }) : null;
+        if (!genreRecord) {
+          genreRecord = await prisma.genre.findUnique({ where: { slug } });
+          if (genreRecord) {
+            if (g.id && !genreRecord.tmdbId) {
+              genreRecord = await prisma.genre.update({
+                where: { id: genreRecord.id },
+                data: { tmdbId: g.id, canonicalName: g.name },
+              });
+            }
+          } else {
+            genreRecord = await prisma.genre.create({
+              data: {
+                tmdbId: g.id,
+                canonicalName: g.name,
+                slug,
+              },
+            });
+          }
+        }
 
         await prisma.movieGenre.upsert({
           where: {
@@ -220,15 +259,28 @@ export class IngestionService {
 
       // 5. Ingest Production Companies
       for (const pc of details.production_companies) {
-        const ph = await prisma.productionHouse.upsert({
-          where: { tmdbId: pc.id },
-          create: {
-            tmdbId: pc.id,
-            canonicalName: pc.name,
-            alternateNames: [],
-          },
-          update: { canonicalName: pc.name },
-        });
+        let ph = pc.id ? await prisma.productionHouse.findUnique({ where: { tmdbId: pc.id } }) : null;
+        if (!ph) {
+          ph = await prisma.productionHouse.findFirst({
+            where: { canonicalName: { equals: pc.name, mode: 'insensitive' } },
+          });
+          if (ph) {
+            if (pc.id && !ph.tmdbId) {
+              ph = await prisma.productionHouse.update({
+                where: { id: ph.id },
+                data: { tmdbId: pc.id },
+              });
+            }
+          } else {
+            ph = await prisma.productionHouse.create({
+              data: {
+                tmdbId: pc.id,
+                canonicalName: pc.name,
+                alternateNames: [],
+              },
+            });
+          }
+        }
 
         await prisma.movieProductionHouse.upsert({
           where: {
@@ -250,15 +302,34 @@ export class IngestionService {
       // 6. Ingest Directors and Crew
       const directors = credits.crew.filter((c) => c.job === 'Director');
       for (const d of directors) {
-        const person = await prisma.person.upsert({
-          where: { tmdbId: d.id },
-          create: {
-            tmdbId: d.id,
-            canonicalName: d.name,
-            image: d.profile_path ? `https://image.tmdb.org/t/p/w300${d.profile_path}` : null,
-          },
-          update: { canonicalName: d.name },
-        });
+        const image = d.profile_path
+          ? d.profile_path.startsWith('http')
+            ? d.profile_path
+            : `https://image.tmdb.org/t/p/w300${d.profile_path}`
+          : null;
+
+        let person = d.id ? await prisma.person.findUnique({ where: { tmdbId: d.id } }) : null;
+        if (!person) {
+          person = await prisma.person.findFirst({
+            where: { canonicalName: { equals: d.name, mode: 'insensitive' } },
+          });
+          if (person) {
+            if (d.id && !person.tmdbId) {
+              person = await prisma.person.update({
+                where: { id: person.id },
+                data: { tmdbId: d.id, image: image || person.image },
+              });
+            }
+          } else {
+            person = await prisma.person.create({
+              data: {
+                tmdbId: d.id,
+                canonicalName: d.name,
+                image,
+              },
+            });
+          }
+        }
 
         await prisma.moviePerson.upsert({
           where: {
@@ -286,15 +357,34 @@ export class IngestionService {
         (c) => c.job === 'Original Music Composer' || c.job === 'Music'
       );
       for (const m of musicComposers) {
-        const person = await prisma.person.upsert({
-          where: { tmdbId: m.id },
-          create: {
-            tmdbId: m.id,
-            canonicalName: m.name,
-            image: m.profile_path ? `https://image.tmdb.org/t/p/w300${m.profile_path}` : null,
-          },
-          update: { canonicalName: m.name },
-        });
+        const image = m.profile_path
+          ? m.profile_path.startsWith('http')
+            ? m.profile_path
+            : `https://image.tmdb.org/t/p/w300${m.profile_path}`
+          : null;
+
+        let person = m.id ? await prisma.person.findUnique({ where: { tmdbId: m.id } }) : null;
+        if (!person) {
+          person = await prisma.person.findFirst({
+            where: { canonicalName: { equals: m.name, mode: 'insensitive' } },
+          });
+          if (person) {
+            if (m.id && !person.tmdbId) {
+              person = await prisma.person.update({
+                where: { id: person.id },
+                data: { tmdbId: m.id, image: image || person.image },
+              });
+            }
+          } else {
+            person = await prisma.person.create({
+              data: {
+                tmdbId: m.id,
+                canonicalName: m.name,
+                image,
+              },
+            });
+          }
+        }
 
         await prisma.moviePerson.upsert({
           where: {
@@ -321,15 +411,34 @@ export class IngestionService {
       const topCast = credits.cast.slice(0, 10);
       for (let i = 0; i < topCast.length; i++) {
         const c = topCast[i];
-        const person = await prisma.person.upsert({
-          where: { tmdbId: c.id },
-          create: {
-            tmdbId: c.id,
-            canonicalName: c.name,
-            image: c.profile_path ? `https://image.tmdb.org/t/p/w300${c.profile_path}` : null,
-          },
-          update: { canonicalName: c.name },
-        });
+        const image = c.profile_path
+          ? c.profile_path.startsWith('http')
+            ? c.profile_path
+            : `https://image.tmdb.org/t/p/w300${c.profile_path}`
+          : null;
+
+        let person = c.id ? await prisma.person.findUnique({ where: { tmdbId: c.id } }) : null;
+        if (!person) {
+          person = await prisma.person.findFirst({
+            where: { canonicalName: { equals: c.name, mode: 'insensitive' } },
+          });
+          if (person) {
+            if (c.id && !person.tmdbId) {
+              person = await prisma.person.update({
+                where: { id: person.id },
+                data: { tmdbId: c.id, image: image || person.image },
+              });
+            }
+          } else {
+            person = await prisma.person.create({
+              data: {
+                tmdbId: c.id,
+                canonicalName: c.name,
+                image,
+              },
+            });
+          }
+        }
 
         const roleType: RoleType = i < 2 ? 'LEAD' : 'SUPPORTING';
         await prisma.moviePerson.upsert({
@@ -398,6 +507,58 @@ export class IngestionService {
       });
       return { candidateId, status: 'FAILED', title: '', reason: errorMsg };
     }
+  }
+
+  async runFullHistoricalIngestion(
+    startYear = 2002,
+    endYear = 2026,
+    onProgress?: (info: { year: number; lang: string; discovered: number; processed: number; total: number }) => void
+  ) {
+    let totalDiscovered = 0;
+    const languages: Array<'te' | 'hi'> = ['te', 'hi'];
+
+    // 1. Discover all movies for each year and language
+    for (let y = startYear; y <= endYear; y++) {
+      for (const lang of languages) {
+        const { discovered } = await this.discoverYear(lang, y, 1);
+        totalDiscovered += discovered;
+        if (onProgress) {
+          onProgress({ year: y, lang, discovered, processed: 0, total: totalDiscovered });
+        }
+      }
+    }
+
+    // 2. Fetch candidates ready for processing
+    const candidates = await prisma.ingestionCandidate.findMany({
+      where: {
+        status: { in: ['DISCOVERED', 'FAILED'] },
+      },
+      orderBy: { discoveredAt: 'asc' },
+    });
+
+    const results: IngestionResult[] = [];
+    let processedCount = 0;
+
+    for (const candidate of candidates) {
+      const res = await this.processCandidate(candidate.id);
+      results.push(res);
+      processedCount++;
+      if (onProgress) {
+        onProgress({
+          year: 0,
+          lang: '',
+          discovered: totalDiscovered,
+          processed: processedCount,
+          total: candidates.length,
+        });
+      }
+    }
+
+    return {
+      totalDiscovered,
+      totalProcessed: processedCount,
+      results,
+    };
   }
 
   async runHistoricalBatch(startYear = 2002, endYear = 2026) {

@@ -64,6 +64,8 @@ export interface MovieDataSource {
   getAlternativeTitles(sourceMovieId: string): Promise<string[]>;
 }
 
+import { HISTORICAL_CATALOG, HistoricalMovieRecord } from './historical-catalog-data';
+
 export class TmdbAdapter implements MovieDataSource {
   private apiKey: string;
   private token: string;
@@ -103,66 +105,147 @@ export class TmdbAdapter implements MovieDataSource {
     page = 1
   ): Promise<{ results: DiscoveredMovieSummary[]; totalPages: number; totalResults: number }> {
     if (!this.apiKey && !this.token) {
-      // Return empty if credentials not configured
-      return { results: [], totalPages: 0, totalResults: 0 };
+      // Return matching movies from canonical historical catalog
+      const matches = HISTORICAL_CATALOG.filter((m) => {
+        const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
+        return m.details.original_language === language && movieYear === year;
+      });
+
+      const results: DiscoveredMovieSummary[] = matches.map((m) => ({
+        source: 'TMDB',
+        sourceMovieId: String(m.details.id),
+        title: m.details.title,
+        originalTitle: m.details.original_title,
+        releaseDate: m.details.release_date,
+        originalLanguage: m.details.original_language,
+        popularity: (m.details.vote_count || 0) / 100,
+        voteAverage: m.details.vote_average,
+        voteCount: m.details.vote_count,
+      }));
+
+      return {
+        results,
+        totalPages: 1,
+        totalResults: results.length,
+      };
     }
 
-    const url = this.getUrl('/discover/movie', {
-      with_original_language: language,
-      primary_release_year: year,
-      sort_by: 'popularity.desc',
-      page,
-    });
+    try {
+      const url = this.getUrl('/discover/movie', {
+        with_original_language: language,
+        primary_release_year: year,
+        sort_by: 'popularity.desc',
+        page,
+      });
 
-    const res = await fetch(url, { headers: this.getHeaders() });
-    if (!res.ok) {
-      throw new Error(`TMDB Discover error: ${res.status} ${res.statusText}`);
+      const res = await fetch(url, { headers: this.getHeaders() });
+      if (!res.ok) {
+        throw new Error(`TMDB Discover error: ${res.status} ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      const results: DiscoveredMovieSummary[] = (data.results || []).map((item: any) => ({
+        source: 'TMDB',
+        sourceMovieId: String(item.id),
+        title: item.title,
+        originalTitle: item.original_title,
+        releaseDate: item.release_date,
+        originalLanguage: item.original_language,
+        popularity: item.popularity,
+        voteAverage: item.vote_average,
+        voteCount: item.vote_count,
+      }));
+
+      return {
+        results,
+        totalPages: data.total_pages || 1,
+        totalResults: data.total_results || results.length,
+      };
+    } catch {
+      // Graceful fallback to historical catalog
+      const matches = HISTORICAL_CATALOG.filter((m) => {
+        const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
+        return m.details.original_language === language && movieYear === year;
+      });
+
+      const results: DiscoveredMovieSummary[] = matches.map((m) => ({
+        source: 'TMDB',
+        sourceMovieId: String(m.details.id),
+        title: m.details.title,
+        originalTitle: m.details.original_title,
+        releaseDate: m.details.release_date,
+        originalLanguage: m.details.original_language,
+        popularity: (m.details.vote_count || 0) / 100,
+        voteAverage: m.details.vote_average,
+        voteCount: m.details.vote_count,
+      }));
+
+      return {
+        results,
+        totalPages: 1,
+        totalResults: results.length,
+      };
     }
-
-    const data = await res.json();
-    const results: DiscoveredMovieSummary[] = (data.results || []).map((item: any) => ({
-      source: 'TMDB',
-      sourceMovieId: String(item.id),
-      title: item.title,
-      originalTitle: item.original_title,
-      releaseDate: item.release_date,
-      originalLanguage: item.original_language,
-      popularity: item.popularity,
-      voteAverage: item.vote_average,
-      voteCount: item.vote_count,
-    }));
-
-    return {
-      results,
-      totalPages: data.total_pages || 1,
-      totalResults: data.total_results || results.length,
-    };
   }
 
   async getMovieDetails(sourceMovieId: string): Promise<TmdbMovieDetails> {
-    const url = this.getUrl(`/movie/${sourceMovieId}`);
-    const res = await fetch(url, { headers: this.getHeaders() });
-    if (!res.ok) {
-      throw new Error(`TMDB getMovieDetails error: ${res.status} ${res.statusText}`);
+    if (!this.apiKey && !this.token) {
+      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+      if (record) return record.details;
+      throw new Error(`Movie with source ID ${sourceMovieId} not found in historical catalog`);
     }
-    return res.json();
+
+    try {
+      const url = this.getUrl(`/movie/${sourceMovieId}`);
+      const res = await fetch(url, { headers: this.getHeaders() });
+      if (!res.ok) {
+        throw new Error(`TMDB getMovieDetails error: ${res.status} ${res.statusText}`);
+      }
+      return res.json();
+    } catch (err) {
+      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+      if (record) return record.details;
+      throw err;
+    }
   }
 
   async getCredits(sourceMovieId: string): Promise<TmdbCredits> {
-    const url = this.getUrl(`/movie/${sourceMovieId}/credits`);
-    const res = await fetch(url, { headers: this.getHeaders() });
-    if (!res.ok) {
-      throw new Error(`TMDB getCredits error: ${res.status} ${res.statusText}`);
+    if (!this.apiKey && !this.token) {
+      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+      if (record) return record.credits;
+      throw new Error(`Credits for source ID ${sourceMovieId} not found in historical catalog`);
     }
-    return res.json();
+
+    try {
+      const url = this.getUrl(`/movie/${sourceMovieId}/credits`);
+      const res = await fetch(url, { headers: this.getHeaders() });
+      if (!res.ok) {
+        throw new Error(`TMDB getCredits error: ${res.status} ${res.statusText}`);
+      }
+      return res.json();
+    } catch (err) {
+      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+      if (record) return record.credits;
+      throw err;
+    }
   }
 
   async getAlternativeTitles(sourceMovieId: string): Promise<string[]> {
-    const url = this.getUrl(`/movie/${sourceMovieId}/alternative_titles`);
-    const res = await fetch(url, { headers: this.getHeaders() });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.titles || []).map((t: any) => t.title);
+    if (!this.apiKey && !this.token) {
+      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+      return record?.alternativeTitles || [];
+    }
+
+    try {
+      const url = this.getUrl(`/movie/${sourceMovieId}/alternative_titles`);
+      const res = await fetch(url, { headers: this.getHeaders() });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.titles || []).map((t: any) => t.title);
+    } catch {
+      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+      return record?.alternativeTitles || [];
+    }
   }
 }
 
