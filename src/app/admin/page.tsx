@@ -218,12 +218,12 @@ export default function AdminPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="glass-card p-4 rounded-2xl border border-slate-800">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Active Movies
+                Total Movies
               </span>
               <p className="text-2xl font-black text-amber-400 mt-1">
-                {overview?.activeMovies ?? overview?.movieCount ?? 0}
+                {overview?.totalMovies ?? overview?.movieCount ?? 0}
               </p>
-              <span className="text-[10px] text-slate-500">Telugu & Hindi (2002+)</span>
+              <span className="text-[10px] text-slate-500">Active: {overview?.activeMovies ?? 0}</span>
             </div>
 
             <div className="glass-card p-4 rounded-2xl border border-slate-800">
@@ -233,17 +233,7 @@ export default function AdminPage() {
               <p className="text-2xl font-black text-emerald-400 mt-1">
                 {overview?.playableGuesses ?? 0}
               </p>
-              <span className="text-[10px] text-emerald-400/80">Eligible to guess</span>
-            </div>
-
-            <div className="glass-card p-4 rounded-2xl border border-slate-800">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Playable Targets
-              </span>
-              <p className="text-2xl font-black text-amber-300 mt-1">
-                {overview?.playableTargets ?? 0}
-              </p>
-              <span className="text-[10px] text-amber-400/80">Eligible secret targets</span>
+              <span className="text-[10px] text-emerald-400/80">Targets: {overview?.playableTargets ?? 0}</span>
             </div>
 
             <div className="glass-card p-4 rounded-2xl border border-slate-800">
@@ -253,7 +243,17 @@ export default function AdminPage() {
               <p className="text-2xl font-black text-purple-400 mt-1">
                 {overview?.needsReview ?? overview?.pendingReviewCount ?? 0}
               </p>
-              <span className="text-[10px] text-slate-500">Pending verification</span>
+              <span className="text-[10px] text-slate-500">Rejected: {overview?.rejectedCount ?? 0}</span>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-slate-800">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Catalog Coverage
+              </span>
+              <p className="text-lg font-black text-cyan-300 mt-1">
+                {overview?.coverageStatus || 'PARTIAL (2002–2026)'}
+              </p>
+              <span className="text-[10px] text-slate-500">Telugu & Hindi Cinema</span>
             </div>
           </div>
 
