@@ -12,10 +12,10 @@ export default function Footer() {
           <span>— Indian Cinema Deduction Game</span>
         </div>
 
-        <div className="flex items-center space-x-1 text-slate-400">
+        <div className="flex items-center space-x-1.5 text-slate-400">
           <span>Crafted with</span>
-          <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500" />
-          <span>for Telugu & Hindi movie buffs</span>
+          <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500 inline-block" />
+          <span>By Lalith</span>
         </div>
 
         <div className="flex items-center space-x-4 text-slate-400">
