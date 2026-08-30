@@ -218,48 +218,42 @@ export default function AdminPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="glass-card p-4 rounded-2xl border border-slate-800">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Active Catalog Movies
+                Total Movies
               </span>
               <p className="text-2xl font-black text-amber-400 mt-1">
-                {overview?.movieCount ?? 0}
+                {overview?.totalMovies ?? overview?.movieCount ?? 0}
               </p>
-              <span className="text-[10px] text-slate-500">Telugu & Hindi (2002+)</span>
+              <span className="text-[10px] text-slate-500">Active: {overview?.activeMovies ?? 0}</span>
             </div>
 
             <div className="glass-card p-4 rounded-2xl border border-slate-800">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Total Games Played
-              </span>
-              <p className="text-2xl font-black text-white mt-1">
-                {overview?.gamesPlayed ?? 0}
-              </p>
-              <span className="text-[10px] text-emerald-400">
-                Win Rate: {overview?.winRate ?? '0%'}
-              </span>
-            </div>
-
-            <div className="glass-card p-4 rounded-2xl border border-slate-800">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Upcoming Daily Puzzles
+                Playable Guesses
               </span>
               <p className="text-2xl font-black text-emerald-400 mt-1">
-                {overview?.upcomingPuzzlesCount ?? 0}
+                {overview?.playableGuesses ?? 0}
               </p>
-              <span className="text-[10px] text-slate-500">
-                Status: {overview?.puzzleSafetyStatus ?? 'HEALTHY'}
-              </span>
+              <span className="text-[10px] text-emerald-400/80">Targets: {overview?.playableTargets ?? 0}</span>
             </div>
 
             <div className="glass-card p-4 rounded-2xl border border-slate-800">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Ingestion Queue
+                Needs Review
               </span>
               <p className="text-2xl font-black text-purple-400 mt-1">
-                {overview?.queueStats?.queued ?? 0} Queued
+                {overview?.needsReview ?? overview?.pendingReviewCount ?? 0}
               </p>
-              <span className="text-[10px] text-slate-500">
-                {overview?.candidateCount ?? 0} total candidates
+              <span className="text-[10px] text-slate-500">Rejected: {overview?.rejectedCount ?? 0}</span>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-slate-800">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Catalog Coverage
               </span>
+              <p className="text-lg font-black text-cyan-300 mt-1">
+                {overview?.coverageStatus || 'PARTIAL (2002–2026)'}
+              </p>
+              <span className="text-[10px] text-slate-500">Telugu & Hindi Cinema</span>
             </div>
           </div>
 
@@ -417,7 +411,7 @@ export default function AdminPage() {
 
             <div className="divide-y divide-slate-800 glass-card rounded-2xl border border-slate-800 overflow-hidden">
               {movies.map((m) => (
-                <div key={m.id} className="p-3.5 flex items-center justify-between text-xs">
+                <div key={m.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
                   <div>
                     <div className="flex items-center space-x-2">
                       <span className="font-bold text-slate-100">{m.primaryTitle}</span>
@@ -425,19 +419,57 @@ export default function AdminPage() {
                       <span className="text-slate-500 font-mono text-[10px]">ID: {m.id}</span>
                     </div>
                     <p className="text-slate-400 text-[11px] mt-0.5">
-                      Languages: {m.supportedLanguages?.join(', ')} • Rating: {m.rating || 'N/A'}
+                      Languages: {m.supportedLanguages?.join(', ')} • Rating: {m.rating || 'N/A'} • Box Office: {m.boxOffice ? `₹${(m.boxOffice / 10000000).toFixed(1)} Cr` : 'N/A'}
                     </p>
                   </div>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {/* Lifecycle Status */}
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        m.lifecycleStatus === 'ACTIVE'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                          : m.lifecycleStatus === 'MERGED'
+                          ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                          : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                      }`}
+                    >
+                      {m.lifecycleStatus}
+                    </span>
+
+                    {/* Guess Playability */}
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        m.eligibility?.playableAsGuess
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                      }`}
+                    >
+                      Guess: {m.eligibility?.playableAsGuess ? 'YES' : 'NO'}
+                    </span>
+
+                    {/* Target Playability */}
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         m.eligibility?.playableAsTarget
-                          ? 'bg-emerald-500/20 text-emerald-300'
-                          : 'bg-slate-800 text-slate-400'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700'
                       }`}
                     >
-                      {m.eligibility?.playableAsTarget ? 'Target Eligible' : 'Guess Only'}
+                      Target: {m.eligibility?.playableAsTarget ? 'YES' : 'NO'}
+                    </span>
+
+                    {/* Review Status */}
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        m.eligibility?.reviewStatus === 'APPROVED'
+                          ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                          : m.eligibility?.reviewStatus === 'PENDING'
+                          ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                      }`}
+                    >
+                      {m.eligibility?.reviewStatus || 'NO_REVIEW'}
                     </span>
                   </div>
                 </div>

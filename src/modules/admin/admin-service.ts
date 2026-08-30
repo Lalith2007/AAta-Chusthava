@@ -181,14 +181,49 @@ export class AdminService {
   }
 
   async getSystemOverview() {
-    const movieCount = await prisma.movie.count({ where: { lifecycleStatus: 'ACTIVE' } });
+    const totalMovies = await prisma.movie.count();
+    const activeMovies = await prisma.movie.count({ where: { lifecycleStatus: 'ACTIVE' } });
+    
+    const playableGuesses = await prisma.movie.count({
+      where: {
+        lifecycleStatus: 'ACTIVE',
+        eligibility: { playableAsGuess: true },
+      },
+    });
+
+    const playableTargets = await prisma.movie.count({
+      where: {
+        lifecycleStatus: 'ACTIVE',
+        eligibility: { playableAsTarget: true },
+      },
+    });
+
+    const playableBoth = await prisma.movie.count({
+      where: {
+        lifecycleStatus: 'ACTIVE',
+        eligibility: {
+          playableAsGuess: true,
+          playableAsTarget: true,
+        },
+      },
+    });
+
+    const needsReview = await prisma.gameEligibility.count({
+      where: { reviewStatus: 'PENDING' },
+    });
+
+    const rejectedCount = await prisma.gameEligibility.count({
+      where: { reviewStatus: 'REJECTED' },
+    });
+
+    const disabledCount = await prisma.movie.count({
+      where: { lifecycleStatus: 'DISABLED' },
+    });
+
     const gamesPlayed = await prisma.gameSession.count();
     const gamesWon = await prisma.gameSession.count({ where: { status: 'WON' } });
     const queueStats = queueService.getQueueStats();
     const candidateCount = await prisma.ingestionCandidate.count();
-    const pendingReviewCount = await prisma.gameEligibility.count({
-      where: { reviewStatus: 'PENDING' },
-    });
 
     const upcomingPuzzlesCount = await prisma.dailyPuzzle.count({
       where: {
@@ -197,13 +232,20 @@ export class AdminService {
     });
 
     return {
-      movieCount,
+      totalMovies,
+      activeMovies,
+      playableGuesses,
+      playableTargets,
+      playableBoth,
+      needsReview,
+      rejectedCount,
+      disabledCount,
+      coverageStatus: 'PARTIAL (Baseline 2002–2026 Ingested)',
       gamesPlayed,
       gamesWon,
       winRate: gamesPlayed > 0 ? ((gamesWon / gamesPlayed) * 100).toFixed(1) + '%' : '0%',
       queueStats,
       candidateCount,
-      pendingReviewCount,
       upcomingPuzzlesCount,
       puzzleSafetyStatus: upcomingPuzzlesCount >= 3 ? 'HEALTHY' : 'WARNING',
     };
