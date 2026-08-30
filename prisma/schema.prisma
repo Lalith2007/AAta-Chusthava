@@ -1,0 +1,511 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MovieLanguage {
+  TELUGU
+  HINDI
+  TAMIL
+  MALAYALAM
+  KANNADA
+  BENGALI
+  MARATHI
+  ENGLISH
+  OTHER
+}
+
+enum MovieIndustry {
+  TOLLYWOOD
+  BOLLYWOOD
+  KOLLYWOOD
+  MOLLYWOOD
+  SANDALWOOD
+  OTHER
+}
+
+enum BoxOfficeStatus {
+  UNKNOWN
+  ESTIMATED
+  REPORTED
+  FINAL
+  UNAVAILABLE
+}
+
+enum LifecycleStatus {
+  DISCOVERED
+  INGESTING
+  NORMALIZED
+  VALIDATION_REQUIRED
+  ACTIVE
+  DISABLED
+  REJECTED
+  MERGED
+}
+
+enum RelationType {
+  CAST
+  CREW
+}
+
+enum RoleType {
+  LEAD
+  SUPPORTING
+  CAMEO
+  SPECIAL_APPEARANCE
+  DIRECTOR
+  MUSIC_DIRECTOR
+  CINEMATOGRAPHER
+  EDITOR
+  PRODUCER
+  WRITER
+}
+
+enum ProductionHouseRole {
+  PRODUCTION
+  CO_PRODUCTION
+  DISTRIBUTION
+}
+
+enum MovieRelationshipType {
+  REMAKE_OF
+  ADAPTED_FROM
+  SEQUEL_OF
+  PREQUEL_OF
+  SPINOFF_OF
+  SAME_FRANCHISE
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+enum CandidateStatus {
+  DISCOVERED
+  PROCESSING
+  ENRICHED
+  NORMALIZED
+  VALIDATED
+  REJECTED
+  FAILED
+}
+
+enum GameMode {
+  DAILY
+  CHALLENGE
+  PRACTICE
+}
+
+enum GameStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+  DISABLED
+}
+
+enum SessionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  WON
+  LOST
+  EXPIRED
+  ABANDONED
+}
+
+enum SelectionMethod {
+  RANDOM
+  WEIGHTED_RANDOM
+  CURATED
+  ADMIN_SELECTED
+}
+
+enum DailyPuzzleStatus {
+  CANDIDATE
+  SELECTED
+  SCHEDULED
+  ACTIVE
+  ARCHIVED
+}
+
+enum ChallengeStatus {
+  ACTIVE
+  EXPIRED
+  DISABLED
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  EDITOR
+  MODERATOR
+}
+
+model Movie {
+  id                        String              @id @default(uuid())
+  slug                      String              @unique
+  primaryTitle              String
+  originalTitle             String
+  alternativeTitles         String[]            @default([])
+  supportedLanguages        MovieLanguage[]     @default([])
+  industries                MovieIndustry[]     @default([])
+  countries                 String[]            @default([])
+  releaseDate               DateTime?
+  releaseYear               Int
+  canonicalIndiaReleaseDate DateTime?
+  certification             String?
+  budget                    Float?
+  budgetCurrency            String?             @default("INR")
+  boxOffice                 Float?
+  boxOfficeCurrency         String?             @default("INR")
+  boxOfficeStatus           BoxOfficeStatus     @default(UNKNOWN)
+  boxOfficeSource           String?
+  boxOfficeVerifiedAt       DateTime?
+  rating                    Float?
+  ratingVoteCount           Int?                @default(0)
+  ratingSource              String?             @default("TMDB")
+  ratingUpdatedAt           DateTime?
+  posterAsset               String?
+  backdropAsset             String?
+  franchise                 String?
+  lifecycleStatus           LifecycleStatus     @default(ACTIVE)
+  tmdbId                    Int?                @unique
+  imdbId                    String?
+  wikidataId                String?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  // Relations
+  people                    MoviePerson[]
+  productionHouses          MovieProductionHouse[]
+  genres                    MovieGenre[]
+  releases                  MovieRelease[]
+  sourceRelationships       MovieRelationship[] @relation("SourceMovieRel")
+  targetRelationships       MovieRelationship[] @relation("TargetMovieRel")
+  eligibility               GameEligibility?
+  guesses                   GameGuess[]
+  dailyPuzzles              DailyPuzzle[]
+  challenges                Challenge[]
+  targetGames               Game[]              @relation("TargetMovieGames")
+
+  @@index([releaseYear])
+  @@index([lifecycleStatus])
+  @@index([primaryTitle])
+}
+
+model Person {
+  id             String        @id @default(uuid())
+  canonicalName  String
+  alternateNames String[]      @default([])
+  tmdbId         Int?          @unique
+  imdbId         String?
+  image          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  movies         MoviePerson[]
+
+  @@index([canonicalName])
+}
+
+model MoviePerson {
+  id            String       @id @default(uuid())
+  movieId       String
+  personId      String
+  relationType  RelationType
+  roleType      RoleType
+  characterName String?
+  billingOrder  Int?
+  department    String?
+  job           String?
+
+  movie         Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  person        Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([movieId, personId, roleType, relationType])
+  @@index([movieId])
+  @@index([personId])
+  @@index([roleType])
+}
+
+model ProductionHouse {
+  id                String                 @id @default(uuid())
+  canonicalName     String
+  alternateNames    String[]               @default([])
+  parentCompanyId   String?
+  sourceIdentifiers Json?
+  tmdbId            Int?                   @unique
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  parentCompany     ProductionHouse?       @relation("ParentSubsidiary", fields: [parentCompanyId], references: [id])
+  subsidiaries      ProductionHouse[]      @relation("ParentSubsidiary")
+  movies            MovieProductionHouse[]
+
+  @@index([canonicalName])
+}
+
+model MovieProductionHouse {
+  id                String              @id @default(uuid())
+  movieId           String
+  productionHouseId String
+  relationshipType  ProductionHouseRole @default(PRODUCTION)
+
+  movie             Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  productionHouse   ProductionHouse     @relation(fields: [productionHouseId], references: [id], onDelete: Cascade)
+
+  @@unique([movieId, productionHouseId, relationshipType])
+  @@index([movieId])
+  @@index([productionHouseId])
+}
+
+model Genre {
+  id            String       @id @default(uuid())
+  canonicalName String
+  slug          String       @unique
+  tmdbId        Int?         @unique
+
+  movies        MovieGenre[]
+
+  @@index([canonicalName])
+}
+
+model MovieGenre {
+  id      String @id @default(uuid())
+  movieId String
+  genreId String
+
+  movie   Movie  @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([movieId, genreId])
+  @@index([movieId])
+  @@index([genreId])
+}
+
+model MovieRelationship {
+  id               String                @id @default(uuid())
+  sourceMovieId    String
+  targetMovieId    String
+  relationshipType MovieRelationshipType
+
+  sourceMovie      Movie                 @relation("SourceMovieRel", fields: [sourceMovieId], references: [id], onDelete: Cascade)
+  targetMovie      Movie                 @relation("TargetMovieRel", fields: [targetMovieId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceMovieId, targetMovieId, relationshipType])
+  @@index([sourceMovieId])
+  @@index([targetMovieId])
+}
+
+model MovieRelease {
+  id            String    @id @default(uuid())
+  movieId       String
+  country       String    @default("IN")
+  releaseDate   DateTime
+  releaseType   String?
+  certification String?
+  source        String?
+
+  movie         Movie     @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@index([movieId])
+  @@index([country])
+}
+
+model GameEligibility {
+  id                      String       @id @default(uuid())
+  movieId                 String       @unique
+  playableAsGuess         Boolean      @default(true)
+  playableAsTarget        Boolean      @default(true)
+  minimumMetadataComplete Boolean      @default(true)
+  reviewStatus            ReviewStatus @default(APPROVED)
+  disabledReason          String?
+  updatedAt               DateTime     @updatedAt
+
+  movie                   Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
+}
+
+model RawSourceRecord {
+  id             String   @id @default(uuid())
+  source         String
+  sourceRecordId String
+  payload        Json
+  fetchedAt      DateTime @default(now())
+
+  @@unique([source, sourceRecordId])
+  @@index([source])
+}
+
+model IngestionCandidate {
+  id                 String          @id @default(uuid())
+  source             String
+  sourceMovieId      String
+  discoveredAt       DateTime        @default(now())
+  discoveryReason    String?
+  status             CandidateStatus @default(DISCOVERED)
+  lastAttemptAt      DateTime?
+  error              String?
+  rawSourceRecordId  String?
+
+  @@unique([source, sourceMovieId])
+  @@index([status])
+}
+
+model GameRuleset {
+  id                     String   @id @default(uuid())
+  name                   String   @unique
+  maxAttempts            Int      @default(10)
+  enabledClues           String[] @default([])
+  clueConfiguration      Json     @default("{}")
+  hintConfiguration      Json     @default("{}")
+  scoringConfiguration   Json?    @default("{}")
+  duplicateGuessPolicy   String   @default("REJECT_NO_PENALTY")
+  targetEligibilityPolicy String  @default("PLAYABLE_AS_TARGET")
+  createdAt              DateTime @default(now())
+
+  games                  Game[]
+  dailyPuzzles           DailyPuzzle[]
+}
+
+model Game {
+  id            String      @id @default(uuid())
+  mode          GameMode    @default(DAILY)
+  targetMovieId String
+  rulesetId     String
+  maxAttempts   Int         @default(10)
+  status        GameStatus  @default(ACTIVE)
+  createdAt     DateTime    @default(now())
+
+  targetMovie   Movie       @relation("TargetMovieGames", fields: [targetMovieId], references: [id], onDelete: Cascade)
+  ruleset       GameRuleset @relation(fields: [rulesetId], references: [id])
+  sessions      GameSession[]
+  dailyPuzzle   DailyPuzzle?
+  challenge     Challenge?
+
+  @@index([targetMovieId])
+  @@index([mode])
+}
+
+model GameSession {
+  id                 String        @id @default(uuid())
+  gameId             String
+  playerId           String?
+  anonymousPlayerId  String?
+  status             SessionStatus @default(NOT_STARTED)
+  attemptsUsed       Int           @default(0)
+  startedAt          DateTime      @default(now())
+  completedAt        DateTime?
+
+  game               Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  guesses            GameGuess[]
+  hintsUsed          SessionHint[]
+
+  @@index([gameId])
+  @@index([anonymousPlayerId])
+  @@index([playerId])
+  @@index([status])
+}
+
+model GameGuess {
+  id              String      @id @default(uuid())
+  sessionId       String
+  movieId         String
+  attemptNumber   Int
+  evaluation      Json
+  isCorrect       Boolean     @default(false)
+  clientRequestId String?
+  createdAt       DateTime    @default(now())
+
+  session         GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  movie           Movie       @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, attemptNumber])
+  @@index([sessionId])
+  @@index([movieId])
+}
+
+model DailyPuzzle {
+  id              String            @id @default(uuid())
+  puzzleDate      String            @unique // "YYYY-MM-DD"
+  gameId          String            @unique
+  targetMovieId   String
+  targetSnapshot  Json?
+  rulesetId       String
+  selectionMethod SelectionMethod   @default(RANDOM)
+  status          DailyPuzzleStatus @default(ACTIVE)
+  createdAt       DateTime          @default(now())
+  activatedAt     DateTime?
+
+  game            Game              @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  targetMovie     Movie             @relation(fields: [targetMovieId], references: [id], onDelete: Cascade)
+  ruleset         GameRuleset       @relation(fields: [rulesetId], references: [id])
+
+  @@index([puzzleDate])
+  @@index([status])
+}
+
+model Challenge {
+  id            String          @id @default(uuid())
+  gameId        String          @unique
+  publicCode    String          @unique // e.g. "8F4K9Q"
+  targetMovieId String
+  creator       String?
+  status        ChallengeStatus @default(ACTIVE)
+  expiresAt     DateTime?
+  createdAt     DateTime        @default(now())
+
+  game          Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  targetMovie   Movie           @relation(fields: [targetMovieId], references: [id], onDelete: Cascade)
+
+  @@index([publicCode])
+  @@index([status])
+}
+
+model SessionHint {
+  id          String      @id @default(uuid())
+  sessionId   String
+  hintType    String
+  hintContent Json
+  unlockedAt  DateTime    @default(now())
+  revealedAt  DateTime?
+
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  timestamp  DateTime @default(now())
+  actorId    String
+  actorRole  String
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  reason     String?
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([timestamp])
+}
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(EDITOR)
+  permissions  String[]  @default([])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([username])
+  @@index([email])
+}
