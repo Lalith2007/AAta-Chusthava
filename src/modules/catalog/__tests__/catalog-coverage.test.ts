@@ -70,7 +70,7 @@ describe('Catalog Coverage & Ingestion Pipeline', () => {
     const registry = DiscoverySourceRegistry.getInstance();
     const sources = registry.getRegisteredSources();
 
-    expect(sources.length).toBe(3);
+    expect(sources.length).toBeGreaterThanOrEqual(3);
     const tmdb = registry.getSource('TMDB');
     expect(tmdb).toBeDefined();
     expect(tmdb?.sourceName).toBe('TMDB');
@@ -79,6 +79,18 @@ describe('Catalog Coverage & Ingestion Pipeline', () => {
     const imdb = registry.getSource('IMDB');
     expect(imdb).toBeDefined();
     expect(imdb?.isImplemented).toBe(false);
+
+    const omdb = sources.find((s) => s.code === 'OMDB');
+    expect(omdb).toBeDefined();
+    expect(omdb?.status).toBe('SOURCE_CANDIDATE');
+
+    const indianCinemaArchive = sources.find((s) => s.code === 'INDIANCINEMA_MA');
+    expect(indianCinemaArchive).toBeDefined();
+    expect(indianCinemaArchive?.status).toBe('NOT_APPROVED');
+
+    const nfdc = sources.find((s) => s.code === 'NFDC_CBFC');
+    expect(nfdc).toBeDefined();
+    expect(nfdc?.status).toBe('NOT_IMPLEMENTED');
   });
 
   it('guarantees zero duplicate canonical movies in database', async () => {

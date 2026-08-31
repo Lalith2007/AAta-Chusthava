@@ -1,5 +1,5 @@
 import { prisma } from '@/infrastructure/db/client';
-import { DiscoverySourceRegistry } from '@/infrastructure/external-sources/discovery-source';
+import { DiscoverySourceRegistry, DiscoverySourceStatus } from '@/infrastructure/external-sources/discovery-source';
 
 export type CoverageStatus = 'FULL' | 'PARTIAL' | 'UNKNOWN';
 
@@ -30,8 +30,9 @@ export interface YearCoverageItem {
 export interface SourceCoverageItem {
   name: string;
   code: string;
-  status: 'ACTIVE' | 'NOT_IMPLEMENTED' | 'DISABLED';
+  status: DiscoverySourceStatus;
   isImplemented: boolean;
+  description?: string;
   candidatesDiscovered: number;
   successfullyEnriched: number;
   accepted: number;
@@ -346,6 +347,7 @@ export class CatalogCoverageService {
         code: s.code,
         status: s.status,
         isImplemented: s.isImplemented,
+        description: s.description,
         candidatesDiscovered: 0,
         successfullyEnriched: 0,
         accepted: 0,

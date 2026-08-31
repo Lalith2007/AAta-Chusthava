@@ -635,10 +635,20 @@ export default function AdminCatalogPage() {
                           className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
                             src.status === 'ACTIVE'
                               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                              : src.status === 'SOURCE_CANDIDATE'
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                              : src.status === 'NOT_APPROVED'
+                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
                               : 'bg-slate-800 text-slate-400 border border-slate-700'
                           }`}
                         >
-                          {src.status === 'ACTIVE' ? 'Active' : 'Not Implemented'}
+                          {src.status === 'ACTIVE'
+                            ? 'Active'
+                            : src.status === 'SOURCE_CANDIDATE'
+                            ? 'Candidate'
+                            : src.status === 'NOT_APPROVED'
+                            ? 'Not Approved'
+                            : 'Not Implemented'}
                         </span>
                       </div>
                       {src.status === 'ACTIVE' ? (
@@ -675,8 +685,8 @@ export default function AdminCatalogPage() {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500 pt-1">
-                          Connector interface registered. Awaiting official commercial API licensing.
+                        <p className="text-xs text-slate-400 pt-1">
+                          {src.description || 'Connector interface registered. Awaiting official commercial API licensing or data validation.'}
                         </p>
                       )}
                     </div>
