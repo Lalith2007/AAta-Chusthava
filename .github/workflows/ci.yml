@@ -16,12 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
@@ -41,7 +41,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: aata_chusthava_test
         ports:
           - 5432:5432
@@ -52,19 +52,19 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/aata_chusthava_test"
+      DATABASE_URL: "postgresql://postgres:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/aata_chusthava_test"
       NODE_ENV: test
-      ADMIN_API_SECRET: "ci_test_secret"
+      ADMIN_API_SECRET: ${{ secrets.ADMIN_API_SECRET }}
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
@@ -83,16 +83,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck, test]
     env:
-      DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/aata_chusthava_test"
+      DATABASE_URL: "postgresql://postgres:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/aata_chusthava_test"
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
