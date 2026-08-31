@@ -261,6 +261,7 @@ export class WikidataDiscoverySource implements MovieDiscoverySource {
 }
 
 import { wikidataDiscoveryAdapter } from './wikidata-adapter';
+import { wikipediaDiscoveryAdapter } from './wikipedia-adapter';
 
 export class DiscoverySourceRegistry {
   private static instance: DiscoverySourceRegistry;
@@ -270,6 +271,7 @@ export class DiscoverySourceRegistry {
     this.register(new TmdbDiscoverySource());
     this.register(new ImdbDiscoverySource());
     this.register(wikidataDiscoveryAdapter);
+    this.register(wikipediaDiscoveryAdapter);
   }
 
   static getInstance(): DiscoverySourceRegistry {
@@ -312,6 +314,19 @@ export class DiscoverySourceRegistry {
           discovery: true,
           credits: true,
           boxOffice: true,
+          reviews: false,
+        },
+      },
+      {
+        name: 'Wikipedia Filmography (Open CC BY-SA 4.0)',
+        code: 'WIKIPEDIA',
+        isImplemented: true,
+        status: 'ACTIVE',
+        description: 'Candidate universe discovery source derived from annual Wikipedia Telugu and Hindi filmography lists licensed under CC BY-SA 4.0.',
+        capabilities: {
+          discovery: true,
+          credits: true,
+          boxOffice: false,
           reviews: false,
         },
       },
