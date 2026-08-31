@@ -204,4 +204,28 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     expect(report.totals.playableBoth).toBeLessThanOrEqual(report.totals.playableAsGuess);
     expect(report.totals.playableBoth).toBeLessThanOrEqual(report.totals.playableAsTarget);
   });
+
+  it('14. Reconciles candidate-level outcome arithmetic for TMDB (accepted + prior + duplicate + review + rejected = discovered)', async () => {
+    const report = await catalogCoverageService.getCoverageReport();
+    const tmdb = report.sourceBreakdown.find((s) => s.code === 'TMDB');
+
+    expect(tmdb).toBeDefined();
+    expect(tmdb!.candidatesDiscovered).toBeGreaterThan(0);
+    const outcomeSum =
+      tmdb!.accepted + (tmdb!.priorProcessed || 0) + tmdb!.duplicates + tmdb!.review + tmdb!.rejected;
+    expect(outcomeSum).toBe(tmdb!.candidatesDiscovered);
+    expect(tmdb!.candidateOutcomeReconciled).toBe(true);
+  });
+
+  it('15. Reconciles candidate-level outcome arithmetic for Wikidata (accepted + prior + duplicate + review + rejected = discovered)', async () => {
+    const report = await catalogCoverageService.getCoverageReport();
+    const wiki = report.sourceBreakdown.find((s) => s.code === 'WIKIDATA');
+
+    expect(wiki).toBeDefined();
+    expect(wiki!.candidatesDiscovered).toBeGreaterThan(0);
+    const outcomeSum =
+      wiki!.accepted + (wiki!.priorProcessed || 0) + wiki!.duplicates + wiki!.review + wiki!.rejected;
+    expect(outcomeSum).toBe(wiki!.candidatesDiscovered);
+    expect(wiki!.candidateOutcomeReconciled).toBe(true);
+  });
 });

@@ -35,10 +35,14 @@ export interface SourceCoverageItem {
   candidatesDiscovered: number;
   successfullyEnriched: number;
   accepted: number;
+  priorProcessed: number;
   review: number;
   rejected: number;
   duplicates: number;
+  candidateOutcomeSum: number;
+  candidateOutcomeReconciled: boolean;
   newUniqueMoviesContributed: number;
+  canonicalWithSourceId: number;
 }
 
 export interface SourceComparisonReport {
@@ -252,7 +256,10 @@ export class CatalogCoverageService {
     const registeredSources = sourceRegistry.getRegisteredSources();
 
     const tmdbCandidates = candidates.filter((c) => c.source.toUpperCase() === 'TMDB');
-    const tmdbAccepted = movies.filter((m) => m.tmdbId !== null).length;
+    const tmdbAccepted = tmdbCandidates.filter(
+      (c) => c.status === 'VALIDATED' || (c.resolutionReason && c.resolutionReason.includes('ACCEPTED'))
+    ).length;
+    const tmdbPriorProcessed = tmdbCandidates.filter((c) => c.status === 'NORMALIZED').length;
     const tmdbEnriched = tmdbCandidates.filter(
       (c) => c.rawSourceRecordId !== null || ['ENRICHED', 'NORMALIZED', 'VALIDATED', 'DUPLICATE'].includes(c.status)
     ).length;
@@ -263,9 +270,14 @@ export class CatalogCoverageService {
     const tmdbDuplicates = tmdbCandidates.filter(
       (c) => c.status === 'DUPLICATE' || (c.resolutionReason && c.resolutionReason.includes('DUPLICATE'))
     ).length;
+    const tmdbCandidateOutcomeSum = tmdbAccepted + tmdbPriorProcessed + tmdbDuplicates + tmdbReview + tmdbRejected;
+    const tmdbCandidateOutcomeReconciled = tmdbCandidateOutcomeSum === tmdbCandidates.length;
 
     const wikidataCandidates = candidates.filter((c) => c.source.toUpperCase() === 'WIKIDATA');
-    const wikidataAccepted = movies.filter((m) => m.wikidataId !== null).length;
+    const wikidataAccepted = wikidataCandidates.filter(
+      (c) => c.status === 'VALIDATED' || (c.resolutionReason && c.resolutionReason.includes('ACCEPTED'))
+    ).length;
+    const wikidataPriorProcessed = wikidataCandidates.filter((c) => c.status === 'NORMALIZED').length;
     const wikidataEnriched = wikidataCandidates.filter(
       (c) => c.rawSourceRecordId !== null || ['ENRICHED', 'NORMALIZED', 'VALIDATED', 'DUPLICATE'].includes(c.status)
     ).length;
@@ -276,6 +288,9 @@ export class CatalogCoverageService {
     const wikidataDuplicates = wikidataCandidates.filter(
       (c) => c.status === 'DUPLICATE' || (c.resolutionReason && c.resolutionReason.includes('DUPLICATE'))
     ).length;
+    const wikidataCandidateOutcomeSum =
+      wikidataAccepted + wikidataPriorProcessed + wikidataDuplicates + wikidataReview + wikidataRejected;
+    const wikidataCandidateOutcomeReconciled = wikidataCandidateOutcomeSum === wikidataCandidates.length;
 
     const secondaryNewMovies = movies.filter((m) => m.wikidataId !== null && m.tmdbId === null).length;
     const tmdbOnlyCanonical = movies.filter((m) => m.tmdbId !== null && m.wikidataId === null).length;
@@ -283,6 +298,9 @@ export class CatalogCoverageService {
     const neitherSourceCanonical = movies.filter((m) => m.tmdbId === null && m.wikidataId === null).length;
     const sourceMatrixSum = tmdbOnlyCanonical + secondaryNewMovies + bothSourcesCanonical + neitherSourceCanonical;
     const sourceMatrixReconciled = sourceMatrixSum === totalMovies;
+
+    const tmdbCanonicalCount = movies.filter((m) => m.tmdbId !== null).length;
+    const wikidataCanonicalCount = movies.filter((m) => m.wikidataId !== null).length;
 
     const sourceBreakdown: SourceCoverageItem[] = registeredSources.map((s) => {
       if (s.code === 'TMDB') {
@@ -294,10 +312,14 @@ export class CatalogCoverageService {
           candidatesDiscovered: tmdbCandidates.length,
           successfullyEnriched: tmdbEnriched || rawRecords.filter((r) => r.source === 'TMDB').length,
           accepted: tmdbAccepted,
+          priorProcessed: tmdbPriorProcessed,
           review: tmdbReview,
           rejected: tmdbRejected,
           duplicates: tmdbDuplicates,
+          candidateOutcomeSum: tmdbCandidateOutcomeSum,
+          candidateOutcomeReconciled: tmdbCandidateOutcomeReconciled,
           newUniqueMoviesContributed: tmdbAccepted,
+          canonicalWithSourceId: tmdbCanonicalCount,
         };
       }
       if (s.code === 'WIKIDATA') {
@@ -309,10 +331,14 @@ export class CatalogCoverageService {
           candidatesDiscovered: wikidataCandidates.length,
           successfullyEnriched: wikidataEnriched || rawRecords.filter((r) => r.source === 'WIKIDATA').length,
           accepted: wikidataAccepted,
+          priorProcessed: wikidataPriorProcessed,
           review: wikidataReview,
           rejected: wikidataRejected,
           duplicates: wikidataDuplicates,
+          candidateOutcomeSum: wikidataCandidateOutcomeSum,
+          candidateOutcomeReconciled: wikidataCandidateOutcomeReconciled,
           newUniqueMoviesContributed: secondaryNewMovies,
+          canonicalWithSourceId: wikidataCanonicalCount,
         };
       }
       return {
@@ -323,10 +349,14 @@ export class CatalogCoverageService {
         candidatesDiscovered: 0,
         successfullyEnriched: 0,
         accepted: 0,
+        priorProcessed: 0,
         review: 0,
         rejected: 0,
         duplicates: 0,
+        candidateOutcomeSum: 0,
+        candidateOutcomeReconciled: true,
         newUniqueMoviesContributed: 0,
+        canonicalWithSourceId: 0,
       };
     });
 
