@@ -43,6 +43,17 @@ export default function AdminCatalogPage() {
   const [expansionFeedback, setExpansionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [checkpoints, setCheckpoints] = useState<any[]>([]);
 
+  // Catalog Acquisition Framework state
+  const [importJobs, setImportJobs] = useState<any[]>([]);
+  const [acqSources, setAcqSources] = useState<any[]>([]);
+  const [acqSourceCode, setAcqSourceCode] = useState('GENERIC_CSV');
+  const [acqFormat, setAcqFormat] = useState<'CSV' | 'JSON' | 'NDJSON'>('CSV');
+  const [acqInputRef, setAcqInputRef] = useState('');
+  const [acqPayload, setAcqPayload] = useState('');
+  const [acqDryRun, setAcqDryRun] = useState(false);
+  const [runningAcquisition, setRunningAcquisition] = useState(false);
+  const [acquisitionFeedback, setAcquisitionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   const fetchCoverageReport = async () => {
     try {
       setLoading(true);
@@ -60,6 +71,20 @@ export default function AdminCatalogPage() {
       const cpJson = await cpRes.json();
       if (cpJson.success && cpJson.data) {
         setCheckpoints(cpJson.data);
+      }
+
+      // Fetch acquisition sources & jobs
+      const [srcRes, jobsRes] = await Promise.all([
+        fetch('/api/admin/catalog/acquisition/sources').catch(() => null),
+        fetch('/api/admin/catalog/acquisition/jobs').catch(() => null),
+      ]);
+      if (srcRes && srcRes.ok) {
+        const srcJson = await srcRes.json();
+        if (srcJson.success && srcJson.sources) setAcqSources(srcJson.sources);
+      }
+      if (jobsRes && jobsRes.ok) {
+        const jobsJson = await jobsRes.json();
+        if (jobsJson.success && jobsJson.jobs) setImportJobs(jobsJson.jobs);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error');
@@ -193,6 +218,53 @@ export default function AdminCatalogPage() {
       });
     } finally {
       setRunningSecondary(false);
+    }
+  };
+
+  const handleCreateAndRunAcquisition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!acqInputRef || !acqPayload) return;
+
+    try {
+      setRunningAcquisition(true);
+      setAcquisitionFeedback(null);
+      const res = await fetch('/api/admin/catalog/acquisition/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceCode: acqSourceCode,
+          sourceType: acqFormat === 'CSV' ? 'CSV' : 'JSON_FEED',
+          format: acqFormat,
+          inputReference: acqInputRef,
+          payloadContent: acqPayload,
+          runImmediately: true,
+          dryRun: acqDryRun,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.outcome) {
+        const o = json.outcome;
+        setAcquisitionFeedback({
+          type: 'success',
+          message: `Acquisition Job ${o.status}: ${o.recordsDiscovered} discovered, ${o.recordsProcessed} processed (${o.recordsAccepted} accepted, ${o.recordsMatched} matched, ${o.recordsDuplicated} duplicates, ${o.recordsFailed} failed).`,
+        });
+        setAcqPayload('');
+        setAcqInputRef('');
+        await fetchCoverageReport();
+      } else {
+        setAcquisitionFeedback({
+          type: 'error',
+          message: json.error || 'Failed to execute acquisition job.',
+        });
+      }
+    } catch (err: unknown) {
+      setAcquisitionFeedback({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Network error',
+      });
+    } finally {
+      setRunningAcquisition(false);
     }
   };
 
@@ -835,6 +907,213 @@ export default function AdminCatalogPage() {
                 </div>
               </div>
             )}
+
+            {/* Section: Catalog Acquisition & Bulk Import Framework */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+              <div className="border-b border-slate-800 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-sky-400" />
+                    Catalog Acquisition & Bulk Import Framework
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Provider-neutral streaming import engine supporting structured CSV, JSON, NDJSON, and Bulk Datasets.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-sky-500/10 text-sky-400 border border-sky-500/30 rounded-full text-xs font-semibold">
+                    Acquisition Engine Active
+                  </span>
+                </div>
+              </div>
+
+              {/* Registered Acquisition Sources Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {acqSources.map((asrc: any) => (
+                  <div key={asrc.code} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-200">{asrc.name}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          asrc.status === 'ACTIVE'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}
+                      >
+                        {asrc.status}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">{asrc.description}</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      {asrc.supportedFormats?.map((fmt: string) => (
+                        <span
+                          key={fmt}
+                          className="px-2 py-0.5 bg-slate-900 border border-slate-800 rounded-md text-[10px] font-mono text-sky-300"
+                        >
+                          {fmt}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Import Trigger Form */}
+              <div className="p-5 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-sky-400" /> Ingest Structured Dataset Payload
+                </h3>
+                <form onSubmit={handleCreateAndRunAcquisition} className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Source Adapter</label>
+                      <select
+                        value={acqSourceCode}
+                        onChange={(e) => setAcqSourceCode(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-100 font-semibold focus:outline-none focus:border-sky-500"
+                      >
+                        <option value="GENERIC_CSV">GENERIC_CSV (RFC-4180 CSV)</option>
+                        <option value="GENERIC_JSON">GENERIC_JSON (JSON Array / NDJSON)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Format</label>
+                      <select
+                        value={acqFormat}
+                        onChange={(e) => setAcqFormat(e.target.value as any)}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-100 font-semibold focus:outline-none focus:border-sky-500"
+                      >
+                        <option value="CSV">CSV Format</option>
+                        <option value="JSON">JSON Array</option>
+                        <option value="NDJSON">NDJSON (Newline Delimited)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Dataset Reference / Label</label>
+                      <input
+                        type="text"
+                        value={acqInputRef}
+                        onChange={(e) => setAcqInputRef(e.target.value)}
+                        placeholder="e.g. historical_regional_films.csv"
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-slate-400 block mb-1">
+                      Dataset Content (Paste Raw CSV or JSON payload)
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={acqPayload}
+                      onChange={(e) => setAcqPayload(e.target.value)}
+                      placeholder={'title,releaseYear,languages,directors,cast,genres\nExample Film,2015,TELUGU,Director Name,"Actor 1, Actor 2",Drama'}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={acqDryRun}
+                        onChange={(e) => setAcqDryRun(e.target.checked)}
+                        className="rounded border-slate-800 bg-slate-900 text-sky-500 focus:ring-0"
+                      />
+                      <span>Dry-Run Simulation (Validate schema & deduplication without persisting)</span>
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={runningAcquisition || !acqInputRef || !acqPayload}
+                      className="px-5 py-2.5 bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition shadow-md flex items-center gap-2"
+                    >
+                      {runningAcquisition ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Processing Import Job...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" /> Execute Import Job
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {acquisitionFeedback && (
+                    <div
+                      className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                        acquisitionFeedback.type === 'success'
+                          ? 'bg-emerald-950/60 border border-emerald-800 text-emerald-300'
+                          : 'bg-rose-950/60 border border-rose-800 text-rose-300'
+                      }`}
+                    >
+                      {acquisitionFeedback.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      )}
+                      <span>{acquisitionFeedback.message}</span>
+                    </div>
+                  )}
+                </form>
+              </div>
+
+              {/* Import Jobs Ledger */}
+              {importJobs.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Recent Acquisition Jobs ({importJobs.length})
+                  </h3>
+                  <div className="max-h-48 overflow-y-auto rounded-2xl border border-slate-800">
+                    <table className="w-full text-left text-xs border-collapse font-mono">
+                      <thead className="bg-slate-950 text-slate-400 sticky top-0 border-b border-slate-800 font-sans">
+                        <tr>
+                          <th className="py-2 px-3">Job ID</th>
+                          <th className="py-2 px-3">Source</th>
+                          <th className="py-2 px-3">Format</th>
+                          <th className="py-2 px-3">Status</th>
+                          <th className="py-2 px-3 text-center">Discovered</th>
+                          <th className="py-2 px-3 text-center">Accepted</th>
+                          <th className="py-2 px-3 text-center">Duplicates</th>
+                          <th className="py-2 px-3 text-center">Failed</th>
+                          <th className="py-2 px-3 text-right">Created</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
+                        {importJobs.map((j) => (
+                          <tr key={j.id} className="hover:bg-slate-900/60 transition-colors">
+                            <td className="py-2 px-3 font-sans text-slate-300 truncate max-w-[120px]">{j.id.slice(0, 8)}...</td>
+                            <td className="py-2 px-3 text-amber-400 font-bold">{j.sourceCode}</td>
+                            <td className="py-2 px-3 text-sky-400">{j.format}</td>
+                            <td className="py-2 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  j.status === 'COMPLETED'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                    : j.status === 'RUNNING'
+                                    ? 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
+                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                                }`}
+                              >
+                                {j.status}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-center text-slate-100 font-bold">{j.recordsDiscovered}</td>
+                            <td className="py-2 px-3 text-center text-emerald-400 font-bold">{j.recordsAccepted}</td>
+                            <td className="py-2 px-3 text-center text-purple-400 font-bold">{j.recordsDuplicated}</td>
+                            <td className="py-2 px-3 text-center text-rose-400 font-bold">{j.recordsFailed}</td>
+                            <td className="py-2 px-3 text-right text-slate-500 text-[11px]">
+                              {new Date(j.createdAt).toLocaleTimeString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Section 6: Audit Metadata & Timelines */}
             <div className="bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6 shadow-md">

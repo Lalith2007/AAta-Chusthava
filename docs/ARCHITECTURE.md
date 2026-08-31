@@ -38,5 +38,7 @@ The application is structured cleanly within strong domain modules:
 - `src/modules/daily/`: Daily puzzle scheduling, target immutability, and historical archive lookup.
 - `src/modules/challenges/`: Custom friend challenge creator with opaque non-sequential 6-character public codes.
 - `src/modules/hints/`: Hint unlock milestones (Attempt 5 & Attempt 8).
-- `src/modules/ingestion/`: TMDB external source adapter, discovery workers, raw source persistence, and normalization pipelines.
+- `src/modules/ingestion/`: TMDB and Wikidata discovery adapters, discovery checkpoints, candidate deduplication, and normalization pipelines.
+- `src/modules/acquisition/`: Generic Catalog Acquisition Framework, streaming RFC-4180 CSV / JSON / NDJSON parsers, resumable `CatalogImportJob` orchestrators, and bulk import APIs.
+- `src/modules/catalog/`: Catalog coverage aggregation, multi-source provenance matrix, and historical distribution ledgers.
 - `src/modules/admin/`: Operations control plane, review queues, duplicate merging, and audit logging.
