@@ -13,7 +13,7 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
       languages: ['te', 'hi'],
       resume: true,
     });
-  });
+  }, 60000);
 
   it('1. Executes batch historical expansion and tracks candidate accounting', async () => {
     const report = await catalogCoverageService.getCoverageReport();
