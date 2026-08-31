@@ -17,6 +17,8 @@ import {
   PlusCircle,
   Server,
   ShieldCheck,
+  GitCompare,
+  TrendingUp,
 } from 'lucide-react';
 import { CatalogCoverageReport } from '@/modules/catalog/catalog-coverage-service';
 
@@ -31,6 +33,10 @@ export default function AdminCatalogPage() {
   const [missingReason, setMissingReason] = useState('');
   const [ingesting, setIngesting] = useState(false);
   const [ingestFeedback, setIngestFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Secondary batch discovery state
+  const [runningSecondary, setRunningSecondary] = useState(false);
+  const [secondaryFeedback, setSecondaryFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const fetchCoverageReport = async () => {
     try {
@@ -75,7 +81,7 @@ export default function AdminCatalogPage() {
       if (json.success) {
         setIngestFeedback({
           type: 'success',
-          message: `Successfully processed "${json.data.title || missingSourceId}" (Status: ${json.data.status})`,
+          message: `Successfully processed "${json.data.title || missingSourceId}" (Status: ${json.data.status}, Reason: ${json.data.reason || 'Complete'})`,
         });
         setMissingSourceId('');
         setMissingReason('');
@@ -96,6 +102,48 @@ export default function AdminCatalogPage() {
     }
   };
 
+  const handleRunSecondaryDiscovery = async () => {
+    try {
+      setRunningSecondary(true);
+      setSecondaryFeedback(null);
+      const res = await fetch('/api/admin/catalog/secondary-discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: 'WIKIDATA',
+          startYear: 2002,
+          endYear: 2026,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.data) {
+        const summary = json.data.summary;
+        setSecondaryFeedback({
+          type: 'success',
+          message: `Secondary discovery completed: ${summary.totalProcessed} candidates processed (${summary.newMoviesCreated} new unique movies added, ${summary.duplicatesMerged} duplicates reconciled).`,
+        });
+        if (json.data.coverageReport) {
+          setReport(json.data.coverageReport);
+        } else {
+          await fetchCoverageReport();
+        }
+      } else {
+        setSecondaryFeedback({
+          type: 'error',
+          message: json.error || 'Failed to run secondary discovery.',
+        });
+      }
+    } catch (err: unknown) {
+      setSecondaryFeedback({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Network error',
+      });
+    } finally {
+      setRunningSecondary(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -112,7 +160,7 @@ export default function AdminCatalogPage() {
             </div>
             <h1 className="text-3xl font-black tracking-tight text-slate-50 mt-2 flex items-center gap-3">
               <Database className="w-8 h-8 text-amber-500" />
-              Catalog Coverage & Expansion
+              Catalog Coverage & Multi-Source Expansion
             </h1>
             <p className="text-slate-400 text-sm mt-1">
               Historical movie database coverage metrics, playability distribution, and multi-source discovery tracking.
@@ -120,6 +168,14 @@ export default function AdminCatalogPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleRunSecondaryDiscovery}
+              disabled={runningSecondary || loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-semibold rounded-xl border border-indigo-500/30 transition shadow-md disabled:opacity-50"
+            >
+              <Sparkles className={`w-4 h-4 ${runningSecondary ? 'animate-spin text-amber-300' : ''}`} />
+              {runningSecondary ? 'Expanding Wikidata...' : 'Run Wikidata Expansion (2002–2026)'}
+            </button>
             <button
               onClick={fetchCoverageReport}
               disabled={loading}
@@ -130,6 +186,23 @@ export default function AdminCatalogPage() {
             </button>
           </div>
         </div>
+
+        {secondaryFeedback && (
+          <div
+            className={`p-4 rounded-2xl border text-sm flex items-center gap-3 ${
+              secondaryFeedback.type === 'success'
+                ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                : 'bg-rose-950/60 border-rose-800 text-rose-300'
+            }`}
+          >
+            {secondaryFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            )}
+            <span>{secondaryFeedback.message}</span>
+          </div>
+        )}
 
         {error && (
           <div className="p-4 bg-rose-950/50 border border-rose-800 rounded-2xl flex items-center gap-3 text-rose-300 text-sm">
@@ -146,30 +219,31 @@ export default function AdminCatalogPage() {
         ) : report ? (
           <>
             {/* Section 1: Coverage Status & Key Distinctions Banner */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Coverage Status Card */}
-              <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 relative overflow-hidden shadow-xl">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Coverage Status</span>
-                  <span className="px-3 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-xs font-bold uppercase tracking-wide">
-                    {report.coverageStatus}
-                  </span>
-                </div>
-                <div className="mt-4">
-                  <div className="text-3xl font-black text-slate-50 flex items-baseline gap-2">
-                    {report.coverageStatus}
-                    <span className="text-sm font-normal text-slate-400">(2002–2026 Baseline)</span>
+              <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Coverage Status</span>
+                    <span className="px-3 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-xs font-bold uppercase tracking-wide">
+                      {report.coverageStatus}
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                    {report.coverageStatusDescription}
-                  </p>
+                  <div className="mt-4">
+                    <div className="text-3xl font-black text-slate-50 flex items-baseline gap-2">
+                      {report.coverageStatus}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                      {report.coverageStatusDescription}
+                    </p>
+                  </div>
                 </div>
                 <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    Invariants Reconciled
+                    Invariants
                   </span>
-                  <span className="text-emerald-400 font-semibold">100% Mathematically Verified</span>
+                  <span className="text-emerald-400 font-semibold">100% Reconciled</span>
                 </div>
               </div>
 
@@ -227,12 +301,112 @@ export default function AdminCatalogPage() {
                   </div>
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-500">
-                  Approved: {report.totals.approved} | Pending Review: {report.totals.needsReview} | Rejected: {report.totals.rejected}
+                  Approved: {report.totals.approved} | Pending: {report.totals.needsReview}
+                </div>
+              </div>
+
+              {/* Secondary Discovery Contribution Card */}
+              <div className="bg-gradient-to-br from-indigo-950/60 to-slate-900 border border-indigo-800/60 rounded-3xl p-6 shadow-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-indigo-400" /> Secondary Expansion
+                    </span>
+                    <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold">
+                      Wikidata
+                    </span>
+                  </div>
+                  <div className="mt-4 text-3xl font-black text-slate-50">
+                    +{report.sourceComparison?.newCanonicalContributedBySecondary || 0}
+                    <span className="text-sm font-normal text-indigo-300 ml-2">New Movies</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-slate-950/80 p-2 rounded-xl border border-indigo-900/60">
+                      <span className="text-slate-400 block">Discovered</span>
+                      <span className="text-indigo-300 font-bold text-sm">
+                        {report.sourceComparison?.secondaryCandidates || 0}
+                      </span>
+                    </div>
+                    <div className="bg-slate-950/80 p-2 rounded-xl border border-indigo-900/60">
+                      <span className="text-slate-400 block">Cross-Matched</span>
+                      <span className="text-violet-300 font-bold text-sm">
+                        {report.sourceComparison?.crossSourceOverlap || 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-indigo-900/60 text-[11px] text-indigo-300">
+                  Total Canonical from Secondary: {report.sourceComparison?.bothSourcesCanonical + report.sourceComparison?.secondaryOnlyCanonical}
                 </div>
               </div>
             </div>
 
-            {/* Section 2: Mutually Exclusive Language Breakdown */}
+            {/* Section 2: Multi-Source Comparison & Overlap Matrix */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <GitCompare className="w-5 h-5 text-indigo-400" />
+                    Multi-Source Discovery Comparison & Overlap
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Real-time comparison between primary TMDB source and secondary Wikidata Open Knowledge Graph.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-full text-xs font-semibold">
+                    Multi-Source Provenance Active
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">TMDB Candidates</span>
+                  <span className="text-2xl font-black text-sky-400 mt-1 block">
+                    {report.sourceComparison?.tmdbCandidates || 0}
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Discovered</span>
+                </div>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Wikidata Candidates</span>
+                  <span className="text-2xl font-black text-indigo-400 mt-1 block">
+                    {report.sourceComparison?.secondaryCandidates || 0}
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Discovered</span>
+                </div>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Source Overlap</span>
+                  <span className="text-2xl font-black text-violet-400 mt-1 block">
+                    {report.sourceComparison?.crossSourceOverlap || 0}
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Deduplicated</span>
+                </div>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">TMDB-Only Movies</span>
+                  <span className="text-2xl font-black text-sky-300 mt-1 block">
+                    {report.sourceComparison?.tmdbOnlyCanonical || 0}
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Canonical</span>
+                </div>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Both Sources Linked</span>
+                  <span className="text-2xl font-black text-emerald-400 mt-1 block">
+                    {report.sourceComparison?.bothSourcesCanonical || 0}
+                  </span>
+                  <span className="text-[10px] text-emerald-500 mt-0.5 block">Cross-Referenced</span>
+                </div>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-indigo-600/60 text-center bg-indigo-950/30">
+                  <span className="text-xs text-indigo-300 block uppercase font-bold">New From Secondary</span>
+                  <span className="text-2xl font-black text-amber-400 mt-1 block">
+                    +{report.sourceComparison?.newCanonicalContributedBySecondary || 0}
+                  </span>
+                  <span className="text-[10px] text-amber-500 mt-0.5 block">Coverage Expanded</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Mutually Exclusive Language Breakdown */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-800 pb-4">
                 <div>
@@ -286,7 +460,7 @@ export default function AdminCatalogPage() {
               </div>
             </div>
 
-            {/* Section 3: Year-by-Year Coverage Table (2002 - 2026) */}
+            {/* Section 4: Year-by-Year Coverage Table (2002 - 2026) */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
                 <div>
@@ -295,7 +469,7 @@ export default function AdminCatalogPage() {
                     Year-by-Year Historical Distribution (2002–2026)
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Reconciled yearly breakdown across 25 historical years.
+                    Reconciled yearly breakdown across 25 historical years with secondary candidate expansion counts.
                   </p>
                 </div>
                 <div className="text-xs text-slate-400">
@@ -314,7 +488,7 @@ export default function AdminCatalogPage() {
                       <th className="py-3 px-3">Other</th>
                       <th className="py-3 px-3 font-bold text-slate-200">Year Total</th>
                       <th className="py-3 px-3">Playable Targets</th>
-                      <th className="py-3 px-3">Needs Review</th>
+                      <th className="py-3 px-3">Secondary Candidates</th>
                       <th className="py-3 px-3 text-center">Invariant</th>
                     </tr>
                   </thead>
@@ -328,7 +502,9 @@ export default function AdminCatalogPage() {
                         <td className="py-2.5 px-3 text-slate-400">{row.other}</td>
                         <td className="py-2.5 px-3 font-bold text-emerald-400 font-sans">{row.total}</td>
                         <td className="py-2.5 px-3 text-sky-400">{row.playableTargets}</td>
-                        <td className="py-2.5 px-3 text-slate-400">{row.needsReview}</td>
+                        <td className="py-2.5 px-3 text-violet-300">
+                          {row.secondaryCandidateCount ? `${row.secondaryCandidateCount} found` : '-'}
+                        </td>
                         <td className="py-2.5 px-3 text-center">
                           {row.isReconciled ? (
                             <span className="text-emerald-400 font-bold" title="Reconciled">✓</span>
@@ -348,7 +524,7 @@ export default function AdminCatalogPage() {
                       <td className="py-3 px-3 text-slate-400">{report.languageBreakdown.other}</td>
                       <td className="py-3 px-3 text-emerald-400 text-sm font-black">{report.totals.totalMovies}</td>
                       <td className="py-3 px-3 text-sky-400">{report.totals.playableAsTarget}</td>
-                      <td className="py-3 px-3 text-slate-400">{report.totals.needsReview}</td>
+                      <td className="py-3 px-3 text-violet-300">{report.sourceComparison?.secondaryCandidates || 0}</td>
                       <td className="py-3 px-3 text-center text-emerald-400 font-bold">100% Pass</td>
                     </tr>
                   </tfoot>
@@ -356,7 +532,7 @@ export default function AdminCatalogPage() {
               </div>
             </div>
 
-            {/* Section 4: Discovery Sources & Missing Candidate Workflow */}
+            {/* Section 5: Discovery Sources & Missing Candidate Workflow */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Discovery Source Status */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
@@ -417,7 +593,7 @@ export default function AdminCatalogPage() {
                         </div>
                       ) : (
                         <p className="text-xs text-slate-500 pt-1">
-                          Connector interface registered. Awaiting official API credentials / indexing integration.
+                          Connector interface registered. Awaiting official commercial API licensing.
                         </p>
                       )}
                     </div>
@@ -446,20 +622,22 @@ export default function AdminCatalogPage() {
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500"
                     >
                       <option value="TMDB">The Movie Database (TMDB) [Active]</option>
-                      <option value="IMDB" disabled>IMDb [Not Connected]</option>
-                      <option value="WIKIDATA" disabled>Wikidata [Not Connected]</option>
+                      <option value="WIKIDATA">Wikidata Open Knowledge Graph [Active]</option>
+                      <option value="IMDB" disabled>IMDb [Awaiting License]</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 block mb-1.5">Source Movie ID / TMDB ID</label>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                      Source Movie ID ({missingSource === 'WIKIDATA' ? 'Wikidata QID e.g. Q4699313' : 'TMDB ID e.g. 579974'})
+                    </label>
                     <input
                       type="text"
-                      placeholder="e.g. 579974 (RRR) or 256040 (Baahubali)"
+                      placeholder={missingSource === 'WIKIDATA' ? 'e.g. Q4699313 (Aithe)' : 'e.g. 579974 (RRR)'}
                       value={missingSourceId}
                       onChange={(e) => setMissingSourceId(e.target.value)}
                       required
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-amber-500 font-mono"
                     />
                   </div>
 
@@ -510,7 +688,7 @@ export default function AdminCatalogPage() {
               </div>
             </div>
 
-            {/* Section 5: Audit Metadata & Timelines */}
+            {/* Section 6: Audit Metadata & Timelines */}
             <div className="bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6 shadow-md">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-400" /> Historical Catalog Audit Metadata

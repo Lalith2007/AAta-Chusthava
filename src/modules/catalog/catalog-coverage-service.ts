@@ -24,6 +24,7 @@ export interface YearCoverageItem {
   needsReview: number;
   rejected: number;
   isReconciled: boolean;
+  secondaryCandidateCount?: number;
 }
 
 export interface SourceCoverageItem {
@@ -37,6 +38,17 @@ export interface SourceCoverageItem {
   review: number;
   rejected: number;
   duplicates: number;
+  newUniqueMoviesContributed: number;
+}
+
+export interface SourceComparisonReport {
+  tmdbCandidates: number;
+  secondaryCandidates: number;
+  crossSourceOverlap: number;
+  tmdbOnlyCanonical: number;
+  secondaryOnlyCanonical: number;
+  bothSourcesCanonical: number;
+  newCanonicalContributedBySecondary: number;
 }
 
 export interface CatalogCoverageReport {
@@ -56,6 +68,7 @@ export interface CatalogCoverageReport {
   languageBreakdown: LanguageBreakdown;
   yearBreakdown: YearCoverageItem[];
   sourceBreakdown: SourceCoverageItem[];
+  sourceComparison: SourceComparisonReport;
   coverageStatus: CoverageStatus;
   coverageStatusDescription: string;
   auditMetadata: {
@@ -198,6 +211,10 @@ export class CatalogCoverageService {
 
       sumYearTotals += yTotal;
 
+      const secondaryCandidatesForYear = candidates.filter(
+        (c) => c.source.toUpperCase() === 'WIKIDATA' && c.discoveryReason?.includes(String(y))
+      ).length;
+
       yearBreakdown.push({
         year: y,
         teluguOnly: yTeluguOnly,
@@ -209,13 +226,14 @@ export class CatalogCoverageService {
         needsReview: yNeedsReview,
         rejected: yRejected,
         isReconciled: isYearReconciled,
+        secondaryCandidateCount: secondaryCandidatesForYear,
       });
     }
 
     const outOfRangeMovies = movies.filter((m) => m.releaseYear < startYear || m.releaseYear > endYear);
     const globalYearsReconciled = allYearsReconciled && sumYearTotals + outOfRangeMovies.length === totalMovies;
 
-    // 4. Source Coverage Breakdown
+    // 4. Source Coverage Breakdown & Comparison
     const sourceRegistry = DiscoverySourceRegistry.getInstance();
     const registeredSources = sourceRegistry.getRegisteredSources();
 
@@ -232,6 +250,23 @@ export class CatalogCoverageService {
       (c) => c.status === 'DUPLICATE' || (c.resolutionReason && c.resolutionReason.includes('DUPLICATE'))
     ).length;
 
+    const wikidataCandidates = candidates.filter((c) => c.source.toUpperCase() === 'WIKIDATA');
+    const wikidataAccepted = movies.filter((m) => m.wikidataId !== null).length;
+    const wikidataEnriched = wikidataCandidates.filter(
+      (c) => c.rawSourceRecordId !== null || ['ENRICHED', 'NORMALIZED', 'VALIDATED', 'DUPLICATE'].includes(c.status)
+    ).length;
+    const wikidataReview = wikidataCandidates.filter(
+      (c) => c.status === 'PROCESSING' || c.resolutionReason === 'ACCEPTED_NEEDS_REVIEW'
+    ).length;
+    const wikidataRejected = wikidataCandidates.filter((c) => c.status === 'REJECTED').length;
+    const wikidataDuplicates = wikidataCandidates.filter(
+      (c) => c.status === 'DUPLICATE' || (c.resolutionReason && c.resolutionReason.includes('DUPLICATE'))
+    ).length;
+
+    const secondaryNewMovies = movies.filter((m) => m.wikidataId !== null && m.tmdbId === null).length;
+    const tmdbOnlyCanonical = movies.filter((m) => m.tmdbId !== null && m.wikidataId === null).length;
+    const bothSourcesCanonical = movies.filter((m) => m.tmdbId !== null && m.wikidataId !== null).length;
+
     const sourceBreakdown: SourceCoverageItem[] = registeredSources.map((s) => {
       if (s.code === 'TMDB') {
         return {
@@ -240,11 +275,27 @@ export class CatalogCoverageService {
           status: 'ACTIVE',
           isImplemented: true,
           candidatesDiscovered: tmdbCandidates.length,
-          successfullyEnriched: tmdbEnriched || rawRecords.length,
+          successfullyEnriched: tmdbEnriched || rawRecords.filter((r) => r.source === 'TMDB').length,
           accepted: tmdbAccepted,
           review: tmdbReview,
           rejected: tmdbRejected,
           duplicates: tmdbDuplicates,
+          newUniqueMoviesContributed: tmdbAccepted,
+        };
+      }
+      if (s.code === 'WIKIDATA') {
+        return {
+          name: s.name,
+          code: s.code,
+          status: 'ACTIVE',
+          isImplemented: true,
+          candidatesDiscovered: wikidataCandidates.length,
+          successfullyEnriched: wikidataEnriched || rawRecords.filter((r) => r.source === 'WIKIDATA').length,
+          accepted: wikidataAccepted,
+          review: wikidataReview,
+          rejected: wikidataRejected,
+          duplicates: wikidataDuplicates,
+          newUniqueMoviesContributed: secondaryNewMovies,
         };
       }
       return {
@@ -258,8 +309,19 @@ export class CatalogCoverageService {
         review: 0,
         rejected: 0,
         duplicates: 0,
+        newUniqueMoviesContributed: 0,
       };
     });
+
+    const sourceComparison: SourceComparisonReport = {
+      tmdbCandidates: tmdbCandidates.length,
+      secondaryCandidates: wikidataCandidates.length,
+      crossSourceOverlap: bothSourcesCanonical + wikidataDuplicates,
+      tmdbOnlyCanonical,
+      secondaryOnlyCanonical: secondaryNewMovies,
+      bothSourcesCanonical,
+      newCanonicalContributedBySecondary: secondaryNewMovies,
+    };
 
     // 5. Duplicate Check
     const uniqueSlugs = new Set(movies.map((m) => m.slug));
@@ -297,9 +359,10 @@ export class CatalogCoverageService {
       languageBreakdown,
       yearBreakdown,
       sourceBreakdown,
+      sourceComparison,
       coverageStatus: 'PARTIAL',
       coverageStatusDescription:
-        'Baseline historical catalog initialized (86 curated notable Telugu & Hindi movies across 2002–2026). Continuous expansion and missing-candidate discovery pipeline ready for multi-thousand catalog expansion.',
+        'Catalog actively enriched by primary (TMDB) and secondary (Wikidata Open Knowledge Graph) discovery sources across 2002–2026. Continuous multi-source expansion pipeline ready for progressive discovery.',
       auditMetadata: {
         oldestMovie,
         newestMovie,

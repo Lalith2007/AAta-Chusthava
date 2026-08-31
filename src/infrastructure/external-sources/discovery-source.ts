@@ -257,6 +257,8 @@ export class WikidataDiscoverySource implements MovieDiscoverySource {
   }
 }
 
+import { wikidataDiscoveryAdapter } from './wikidata-adapter';
+
 export class DiscoverySourceRegistry {
   private static instance: DiscoverySourceRegistry;
   private sources: Map<string, MovieDiscoverySource> = new Map();
@@ -264,7 +266,7 @@ export class DiscoverySourceRegistry {
   private constructor() {
     this.register(new TmdbDiscoverySource());
     this.register(new ImdbDiscoverySource());
-    this.register(new WikidataDiscoverySource());
+    this.register(wikidataDiscoveryAdapter);
   }
 
   static getInstance(): DiscoverySourceRegistry {
@@ -298,24 +300,24 @@ export class DiscoverySourceRegistry {
         },
       },
       {
-        name: 'Internet Movie Database (IMDb)',
-        code: 'IMDB',
-        isImplemented: false,
-        status: 'NOT_IMPLEMENTED',
-        description: 'Secondary reference source for box office verification and industry ratings (connector awaiting API licensing).',
+        name: 'Wikidata / Open Knowledge Graph',
+        code: 'WIKIDATA',
+        isImplemented: true,
+        status: 'ACTIVE',
+        description: 'Secondary CC0 open knowledge discovery source for cross-lingual aliases, overlooked historical titles, and award records.',
         capabilities: {
-          discovery: false,
-          credits: false,
-          boxOffice: false,
+          discovery: true,
+          credits: true,
+          boxOffice: true,
           reviews: false,
         },
       },
       {
-        name: 'Wikidata / Open Knowledge',
-        code: 'WIKIDATA',
+        name: 'Internet Movie Database (IMDb)',
+        code: 'IMDB',
         isImplemented: false,
         status: 'NOT_IMPLEMENTED',
-        description: 'Linked open data source for cross-lingual aliases and Indian national film award identifiers.',
+        description: 'Secondary reference source for box office verification and industry ratings (connector awaiting commercial API licensing).',
         capabilities: {
           discovery: false,
           credits: false,

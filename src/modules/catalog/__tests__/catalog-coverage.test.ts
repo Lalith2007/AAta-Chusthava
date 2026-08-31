@@ -62,8 +62,8 @@ describe('Catalog Coverage & Ingestion Pipeline', () => {
     expect(imdbSource?.candidatesDiscovered).toBe(0);
 
     expect(wikidataSource).toBeDefined();
-    expect(wikidataSource?.status).toBe('NOT_IMPLEMENTED');
-    expect(wikidataSource?.isImplemented).toBe(false);
+    expect(wikidataSource?.status).toBe('ACTIVE');
+    expect(wikidataSource?.isImplemented).toBe(true);
   });
 
   it('verifies DiscoverySourceRegistry source registration contract', () => {

@@ -1,5 +1,7 @@
 import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter, MovieDataSource, TmdbMovieDetails, TmdbCredits } from '@/infrastructure/external-sources/tmdb-adapter';
+import { wikidataDiscoveryAdapter, WikidataMovieRecord } from '@/infrastructure/external-sources/wikidata-adapter';
+import { DiscoverySourceRegistry } from '@/infrastructure/external-sources/discovery-source';
 import { MovieLanguage, MovieIndustry, RoleType, RelationType, ProductionHouseRole } from '@/domain/movie/types';
 import { queueService } from '@/infrastructure/queue/queue-service';
 
@@ -9,6 +11,8 @@ export interface IngestionResult {
   status: 'PROCESSED' | 'REVIEW_REQUIRED' | 'SKIPPED' | 'FAILED';
   title: string;
   reason?: string;
+  isNewCanonicalMovie?: boolean;
+  isDuplicate?: boolean;
 }
 
 export class IngestionService {
@@ -91,6 +95,47 @@ export class IngestionService {
     return { discovered: discoveredCount, totalPages: res.totalPages };
   }
 
+  async discoverSecondaryYear(
+    source = 'WIKIDATA',
+    languageCode: 'te' | 'hi',
+    year: number
+  ): Promise<{ discovered: number; totalPages: number }> {
+    const registry = DiscoverySourceRegistry.getInstance();
+    const sourceAdapter = registry.getSource(source);
+
+    if (!sourceAdapter || !sourceAdapter.isImplemented) {
+      return { discovered: 0, totalPages: 0 };
+    }
+
+    const res = await sourceAdapter.discover({ language: languageCode, year });
+    let discoveredCount = 0;
+
+    for (const item of res.results) {
+      const existing = await prisma.ingestionCandidate.findUnique({
+        where: {
+          source_sourceMovieId: {
+            source: source.toUpperCase(),
+            sourceMovieId: item.sourceMovieId,
+          },
+        },
+      });
+
+      if (!existing) {
+        await prisma.ingestionCandidate.create({
+          data: {
+            source: source.toUpperCase(),
+            sourceMovieId: item.sourceMovieId,
+            discoveryReason: `Secondary ${source.toUpperCase()} Discovery ${languageCode.toUpperCase()} ${year}`,
+            status: 'DISCOVERED',
+          },
+        });
+        discoveredCount++;
+      }
+    }
+
+    return { discovered: discoveredCount, totalPages: res.totalPages };
+  }
+
   async processCandidate(candidateId: string): Promise<IngestionResult> {
     const candidate = await prisma.ingestionCandidate.findUnique({
       where: { id: candidateId },
@@ -106,12 +151,15 @@ export class IngestionService {
         data: { status: 'PROCESSING', lastAttemptAt: new Date() },
       });
 
-      // 1. Fetch details & credits
+      if (candidate.source.toUpperCase() === 'WIKIDATA') {
+        return this.processWikidataCandidate(candidate);
+      }
+
+      // --- TMDB / Standard Ingestion Flow ---
       const details = await this.sourceAdapter.getMovieDetails(candidate.sourceMovieId);
       const credits = await this.sourceAdapter.getCredits(candidate.sourceMovieId);
       const altTitles = await this.sourceAdapter.getAlternativeTitles(candidate.sourceMovieId);
 
-      // 2. Store Raw Source Record
       const rawRecord = await prisma.rawSourceRecord.upsert({
         where: {
           source_sourceRecordId: {
@@ -156,13 +204,14 @@ export class IngestionService {
       const industry = this.mapIndustry(primaryLang);
       const slug = this.slugify(details.title, releaseYear);
 
-      // 3. Check for duplicates in normalized movie DB
       let movie = await prisma.movie.findUnique({
         where: { tmdbId: details.id },
       });
 
+      let isNewMovie = false;
+      let isDuplicate = false;
+
       if (!movie) {
-        // Match against existing movies by slug or exact title + year
         const existingBySlug = await prisma.movie.findUnique({
           where: { slug },
         });
@@ -176,11 +225,14 @@ export class IngestionService {
 
         movie = existingBySlug || existingByTitleYear;
 
-        if (movie && !movie.tmdbId) {
-          movie = await prisma.movie.update({
-            where: { id: movie.id },
-            data: { tmdbId: details.id },
-          });
+        if (movie) {
+          isDuplicate = true;
+          if (!movie.tmdbId) {
+            movie = await prisma.movie.update({
+              where: { id: movie.id },
+              data: { tmdbId: details.id },
+            });
+          }
         }
       }
 
@@ -199,6 +251,7 @@ export class IngestionService {
       const boxOfficeStatus = boxOffice ? 'REPORTED' : 'UNKNOWN';
 
       if (!movie) {
+        isNewMovie = true;
         movie = await prisma.movie.create({
           data: {
             slug,
@@ -226,12 +279,12 @@ export class IngestionService {
         });
       }
 
-      // 4. Ingest Genres
+      // Genres
       for (const g of details.genres) {
-        const slug = g.name.toLowerCase().replace(/[^\w]/g, '-');
+        const gSlug = g.name.toLowerCase().replace(/[^\w]/g, '-');
         let genreRecord = g.id ? await prisma.genre.findUnique({ where: { tmdbId: g.id } }) : null;
         if (!genreRecord) {
-          genreRecord = await prisma.genre.findUnique({ where: { slug } });
+          genreRecord = await prisma.genre.findUnique({ where: { slug: gSlug } });
           if (genreRecord) {
             if (g.id && !genreRecord.tmdbId) {
               genreRecord = await prisma.genre.update({
@@ -244,7 +297,7 @@ export class IngestionService {
               data: {
                 tmdbId: g.id,
                 canonicalName: g.name,
-                slug,
+                slug: gSlug,
               },
             });
           }
@@ -257,31 +310,33 @@ export class IngestionService {
               genreId: genreRecord.id,
             },
           },
-          create: { movieId: movie.id, genreId: genreRecord.id },
+          create: {
+            movieId: movie.id,
+            genreId: genreRecord.id,
+          },
           update: {},
         });
       }
 
-      // 5. Ingest Production Companies
-      for (const pc of details.production_companies) {
-        let ph = pc.id ? await prisma.productionHouse.findUnique({ where: { tmdbId: pc.id } }) : null;
-        if (!ph) {
-          ph = await prisma.productionHouse.findFirst({
-            where: { canonicalName: { equals: pc.name, mode: 'insensitive' } },
+      // Production Companies
+      for (const comp of details.production_companies || []) {
+        let phRecord = comp.id ? await prisma.productionHouse.findUnique({ where: { tmdbId: comp.id } }) : null;
+        if (!phRecord) {
+          phRecord = await prisma.productionHouse.findFirst({
+            where: { canonicalName: { equals: comp.name, mode: 'insensitive' } },
           });
-          if (ph) {
-            if (pc.id && !ph.tmdbId) {
-              ph = await prisma.productionHouse.update({
-                where: { id: ph.id },
-                data: { tmdbId: pc.id },
+          if (phRecord) {
+            if (comp.id && !phRecord.tmdbId) {
+              phRecord = await prisma.productionHouse.update({
+                where: { id: phRecord.id },
+                data: { tmdbId: comp.id },
               });
             }
           } else {
-            ph = await prisma.productionHouse.create({
+            phRecord = await prisma.productionHouse.create({
               data: {
-                tmdbId: pc.id,
-                canonicalName: pc.name,
-                alternateNames: [],
+                tmdbId: comp.id,
+                canonicalName: comp.name,
               },
             });
           }
@@ -291,20 +346,20 @@ export class IngestionService {
           where: {
             movieId_productionHouseId_relationshipType: {
               movieId: movie.id,
-              productionHouseId: ph.id,
+              productionHouseId: phRecord.id,
               relationshipType: 'PRODUCTION',
             },
           },
           create: {
             movieId: movie.id,
-            productionHouseId: ph.id,
+            productionHouseId: phRecord.id,
             relationshipType: 'PRODUCTION',
           },
           update: {},
         });
       }
 
-      // 6. Ingest Directors and Crew
+      // Directors
       const directors = credits.crew.filter((c) => c.job === 'Director');
       for (const d of directors) {
         const image = d.profile_path
@@ -412,7 +467,7 @@ export class IngestionService {
         });
       }
 
-      // Cast (Lead and Supporting)
+      // Cast
       const topCast = credits.cast.slice(0, 10);
       for (let i = 0; i < topCast.length; i++) {
         const c = topCast[i];
@@ -460,17 +515,19 @@ export class IngestionService {
             personId: person.id,
             roleType,
             relationType: 'CAST',
-            characterName: c.character || null,
-            billingOrder: c.order,
+            characterName: c.character || 'Lead',
+            billingOrder: i,
           },
-          update: {},
+          update: {
+            characterName: c.character || 'Lead',
+            billingOrder: i,
+          },
         });
       }
 
-      // 7. Quality Validation & Eligibility
       const hasDirector = directors.length > 0;
-      const hasCast = topCast.length > 0;
-      const isTargetPlayable = hasDirector && hasCast && (details.vote_count || 0) >= 5;
+      const hasCast = topCast.length >= 2;
+      const isTargetPlayable = hasDirector && hasCast && !!movie.releaseYear;
 
       await prisma.gameEligibility.upsert({
         where: { movieId: movie.id },
@@ -490,13 +547,21 @@ export class IngestionService {
         },
       });
 
+      const finalStatus = isDuplicate ? 'DUPLICATE' : 'VALIDATED';
+      const resolutionReason = isDuplicate
+        ? 'DUPLICATE_CANONICAL_MATCH'
+        : isTargetPlayable
+        ? 'ACCEPTED_APPROVED'
+        : 'ACCEPTED_NEEDS_REVIEW';
+
       await prisma.ingestionCandidate.update({
         where: { id: candidateId },
         data: {
-          status: 'VALIDATED',
+          status: finalStatus,
           rawSourceRecordId: rawRecord.id,
           processedAt: new Date(),
-          resolutionReason: isTargetPlayable ? 'ACCEPTED_APPROVED' : 'ACCEPTED_NEEDS_REVIEW',
+          resolutionReason,
+          duplicateOfMovieId: isDuplicate ? movie.id : null,
         },
       });
 
@@ -505,6 +570,8 @@ export class IngestionService {
         movieId: movie.id,
         status: isTargetPlayable ? 'PROCESSED' : 'REVIEW_REQUIRED',
         title: movie.primaryTitle,
+        isNewCanonicalMovie: isNewMovie,
+        isDuplicate,
       };
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -521,6 +588,383 @@ export class IngestionService {
     }
   }
 
+  private async processWikidataCandidate(candidate: {
+    id: string;
+    source: string;
+    sourceMovieId: string;
+  }): Promise<IngestionResult> {
+    const record = wikidataDiscoveryAdapter.getRecordById(candidate.sourceMovieId);
+    if (!record) {
+      throw new Error(`Wikidata record ${candidate.sourceMovieId} not found in catalog.`);
+    }
+
+    // 1. Raw record storage
+    const rawRecord = await prisma.rawSourceRecord.upsert({
+      where: {
+        source_sourceRecordId: {
+          source: 'WIKIDATA',
+          sourceRecordId: candidate.sourceMovieId,
+        },
+      },
+      create: {
+        source: 'WIKIDATA',
+        sourceRecordId: candidate.sourceMovieId,
+        payload: record as any,
+      },
+      update: {
+        payload: record as any,
+        fetchedAt: new Date(),
+      },
+    });
+
+    const releaseYear = record.releaseYear;
+    if (!releaseYear || releaseYear < 2002) {
+      await prisma.ingestionCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'REJECTED',
+          error: 'Release year prior to 2002 or invalid',
+          processedAt: new Date(),
+          resolutionReason: 'REJECTED_YEAR_BEFORE_2002',
+        },
+      });
+      return {
+        candidateId: candidate.id,
+        status: 'SKIPPED',
+        title: record.title,
+        reason: 'Year before 2002',
+      };
+    }
+
+    const primaryLang = this.mapLanguage(record.originalLanguage);
+    const industry = this.mapIndustry(primaryLang);
+    const slug = this.slugify(record.title, releaseYear);
+
+    // 2. DEDUPLICATION ENGINE
+    let matchedMovie = null;
+
+    // Check 1: By wikidataId
+    matchedMovie = await prisma.movie.findFirst({
+      where: { wikidataId: record.id },
+    });
+
+    // Check 2: By TMDB ID if cross-referenced
+    if (!matchedMovie && record.tmdbId) {
+      matchedMovie = await prisma.movie.findUnique({
+        where: { tmdbId: record.tmdbId },
+      });
+    }
+
+    // Check 3: By IMDB ID if cross-referenced
+    if (!matchedMovie && record.imdbId) {
+      matchedMovie = await prisma.movie.findFirst({
+        where: { imdbId: record.imdbId },
+      });
+    }
+
+    // Check 4: By slug or exact primaryTitle + releaseYear
+    if (!matchedMovie) {
+      const existingBySlug = await prisma.movie.findUnique({ where: { slug } });
+      const existingByTitle = await prisma.movie.findFirst({
+        where: {
+          primaryTitle: { equals: record.title, mode: 'insensitive' },
+          releaseYear,
+        },
+      });
+      matchedMovie = existingBySlug || existingByTitle;
+    }
+
+    // Check 5: By alternative titles match
+    if (!matchedMovie) {
+      matchedMovie = await prisma.movie.findFirst({
+        where: {
+          releaseYear,
+          alternativeTitles: { hasSome: [record.title, ...record.alternativeTitles] },
+        },
+      });
+    }
+
+    let isNewMovie = false;
+    let isDuplicate = false;
+
+    if (matchedMovie) {
+      isDuplicate = true;
+      // Reconcile metadata: link wikidataId and imdbId if missing
+      if (!matchedMovie.wikidataId || (!matchedMovie.imdbId && record.imdbId)) {
+        matchedMovie = await prisma.movie.update({
+          where: { id: matchedMovie.id },
+          data: {
+            wikidataId: record.id,
+            imdbId: matchedMovie.imdbId || record.imdbId || null,
+          },
+        });
+      }
+
+      await prisma.ingestionCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'DUPLICATE',
+          rawSourceRecordId: rawRecord.id,
+          processedAt: new Date(),
+          resolutionReason: 'DUPLICATE_CANONICAL_MATCH',
+          duplicateOfMovieId: matchedMovie.id,
+        },
+      });
+
+      return {
+        candidateId: candidate.id,
+        movieId: matchedMovie.id,
+        status: 'PROCESSED',
+        title: matchedMovie.primaryTitle,
+        isNewCanonicalMovie: false,
+        isDuplicate: true,
+        reason: 'Duplicate matched and reconciled with existing canonical movie',
+      };
+    }
+
+    // 3. NEW CANONICAL MOVIE CREATION (from secondary source)
+    isNewMovie = true;
+    const boxOffice = record.revenue && record.revenue > 0 ? record.revenue : null;
+    const boxOfficeStatus = boxOffice ? 'REPORTED' : 'UNKNOWN';
+
+    const movie = await prisma.movie.create({
+      data: {
+        slug,
+        primaryTitle: record.title,
+        originalTitle: record.originalTitle,
+        alternativeTitles: record.alternativeTitles,
+        supportedLanguages: [primaryLang],
+        industries: [industry],
+        countries: ['IN'],
+        releaseDate: record.releaseDate ? new Date(record.releaseDate) : null,
+        releaseYear,
+        canonicalIndiaReleaseDate: record.releaseDate ? new Date(record.releaseDate) : null,
+        budget: record.budget && record.budget > 0 ? record.budget : null,
+        boxOffice,
+        boxOfficeStatus,
+        rating: record.rating || null,
+        ratingVoteCount: record.voteCount || 0,
+        ratingSource: 'WIKIDATA',
+        posterAsset: record.posterUrl || null,
+        backdropAsset: record.backdropUrl || null,
+        tmdbId: record.tmdbId || null,
+        imdbId: record.imdbId || null,
+        wikidataId: record.id,
+        lifecycleStatus: 'ACTIVE',
+      },
+    });
+
+    // Ingest Genres
+    for (const g of record.genres) {
+      const gSlug = g.name.toLowerCase().replace(/[^\w]/g, '-');
+      let genreRecord = await prisma.genre.findUnique({ where: { slug: gSlug } });
+      if (!genreRecord) {
+        genreRecord = await prisma.genre.create({
+          data: {
+            canonicalName: g.name,
+            slug: gSlug,
+          },
+        });
+      }
+
+      await prisma.movieGenre.upsert({
+        where: {
+          movieId_genreId: {
+            movieId: movie.id,
+            genreId: genreRecord.id,
+          },
+        },
+        create: {
+          movieId: movie.id,
+          genreId: genreRecord.id,
+        },
+        update: {},
+      });
+    }
+
+    // Ingest Production Companies
+    for (const comp of record.productionCompanies || []) {
+      let phRecord = await prisma.productionHouse.findFirst({
+        where: { canonicalName: { equals: comp.name, mode: 'insensitive' } },
+      });
+      if (!phRecord) {
+        phRecord = await prisma.productionHouse.create({
+          data: {
+            canonicalName: comp.name,
+          },
+        });
+      }
+
+      await prisma.movieProductionHouse.upsert({
+        where: {
+          movieId_productionHouseId_relationshipType: {
+            movieId: movie.id,
+            productionHouseId: phRecord.id,
+            relationshipType: 'PRODUCTION',
+          },
+        },
+        create: {
+          movieId: movie.id,
+          productionHouseId: phRecord.id,
+          relationshipType: 'PRODUCTION',
+        },
+        update: {},
+      });
+    }
+
+    // Ingest Directors
+    for (const d of record.directors) {
+      let person = await prisma.person.findFirst({
+        where: { canonicalName: { equals: d.name, mode: 'insensitive' } },
+      });
+      if (!person) {
+        person = await prisma.person.create({
+          data: {
+            canonicalName: d.name,
+            image: d.profileUrl || null,
+          },
+        });
+      }
+
+      await prisma.moviePerson.upsert({
+        where: {
+          movieId_personId_roleType_relationType: {
+            movieId: movie.id,
+            personId: person.id,
+            roleType: 'DIRECTOR',
+            relationType: 'CREW',
+          },
+        },
+        create: {
+          movieId: movie.id,
+          personId: person.id,
+          roleType: 'DIRECTOR',
+          relationType: 'CREW',
+          job: 'Director',
+          department: 'Directing',
+        },
+        update: {},
+      });
+    }
+
+    // Ingest Music Directors
+    for (const m of record.musicDirectors) {
+      let person = await prisma.person.findFirst({
+        where: { canonicalName: { equals: m.name, mode: 'insensitive' } },
+      });
+      if (!person) {
+        person = await prisma.person.create({
+          data: {
+            canonicalName: m.name,
+            image: m.profileUrl || null,
+          },
+        });
+      }
+
+      await prisma.moviePerson.upsert({
+        where: {
+          movieId_personId_roleType_relationType: {
+            movieId: movie.id,
+            personId: person.id,
+            roleType: 'MUSIC_DIRECTOR',
+            relationType: 'CREW',
+          },
+        },
+        create: {
+          movieId: movie.id,
+          personId: person.id,
+          roleType: 'MUSIC_DIRECTOR',
+          relationType: 'CREW',
+          job: 'Music Director',
+          department: 'Sound',
+        },
+        update: {},
+      });
+    }
+
+    // Ingest Cast
+    for (let i = 0; i < record.cast.length; i++) {
+      const c = record.cast[i];
+      let person = await prisma.person.findFirst({
+        where: { canonicalName: { equals: c.name, mode: 'insensitive' } },
+      });
+      if (!person) {
+        person = await prisma.person.create({
+          data: {
+            canonicalName: c.name,
+            image: c.profileUrl || null,
+          },
+        });
+      }
+
+      const roleType: RoleType = i < 2 ? 'LEAD' : 'SUPPORTING';
+      await prisma.moviePerson.upsert({
+        where: {
+          movieId_personId_roleType_relationType: {
+            movieId: movie.id,
+            personId: person.id,
+            roleType,
+            relationType: 'CAST',
+          },
+        },
+        create: {
+          movieId: movie.id,
+          personId: person.id,
+          roleType,
+          relationType: 'CAST',
+          characterName: c.character || 'Lead',
+          billingOrder: i,
+        },
+        update: {
+          characterName: c.character || 'Lead',
+          billingOrder: i,
+        },
+      });
+    }
+
+    const hasDirector = record.directors.length > 0;
+    const hasCast = record.cast.length >= 2;
+    const isTargetPlayable = hasDirector && hasCast && !!movie.releaseYear;
+
+    await prisma.gameEligibility.upsert({
+      where: { movieId: movie.id },
+      create: {
+        movieId: movie.id,
+        playableAsGuess: true,
+        playableAsTarget: isTargetPlayable,
+        minimumMetadataComplete: hasDirector && hasCast,
+        reviewStatus: isTargetPlayable ? 'APPROVED' : 'PENDING',
+        updatedAt: new Date(),
+      },
+      update: {
+        playableAsGuess: true,
+        playableAsTarget: isTargetPlayable,
+        minimumMetadataComplete: hasDirector && hasCast,
+        updatedAt: new Date(),
+      },
+    });
+
+    await prisma.ingestionCandidate.update({
+      where: { id: candidate.id },
+      data: {
+        status: 'VALIDATED',
+        rawSourceRecordId: rawRecord.id,
+        processedAt: new Date(),
+        resolutionReason: 'ACCEPTED_NEW_CANONICAL',
+      },
+    });
+
+    return {
+      candidateId: candidate.id,
+      movieId: movie.id,
+      status: 'PROCESSED',
+      title: movie.primaryTitle,
+      isNewCanonicalMovie: true,
+      isDuplicate: false,
+      reason: 'New unique movie created from secondary Wikidata discovery',
+    };
+  }
+
   async discoverAndIngestMissingCandidate(
     source: string,
     sourceMovieId: string,
@@ -529,7 +973,7 @@ export class IngestionService {
     let candidate = await prisma.ingestionCandidate.findUnique({
       where: {
         source_sourceMovieId: {
-          source,
+          source: source.toUpperCase(),
           sourceMovieId,
         },
       },
@@ -538,7 +982,7 @@ export class IngestionService {
     if (!candidate) {
       candidate = await prisma.ingestionCandidate.create({
         data: {
-          source,
+          source: source.toUpperCase(),
           sourceMovieId,
           discoveryReason: reason,
           status: 'DISCOVERED',
@@ -557,7 +1001,6 @@ export class IngestionService {
     let totalDiscovered = 0;
     const languages: Array<'te' | 'hi'> = ['te', 'hi'];
 
-    // 1. Discover all movies for each year and language
     for (let y = startYear; y <= endYear; y++) {
       for (const lang of languages) {
         const { discovered } = await this.discoverYear(lang, y, 1);
@@ -568,7 +1011,6 @@ export class IngestionService {
       }
     }
 
-    // 2. Fetch candidates ready for processing
     const candidates = await prisma.ingestionCandidate.findMany({
       where: {
         status: { in: ['DISCOVERED', 'FAILED'] },
@@ -597,6 +1039,52 @@ export class IngestionService {
     return {
       totalDiscovered,
       totalProcessed: processedCount,
+      results,
+    };
+  }
+
+  async runSecondaryHistoricalIngestion(
+    source = 'WIKIDATA',
+    startYear = 2002,
+    endYear = 2026
+  ) {
+    let totalDiscovered = 0;
+    const languages: Array<'te' | 'hi'> = ['te', 'hi'];
+
+    for (let y = startYear; y <= endYear; y++) {
+      for (const lang of languages) {
+        const { discovered } = await this.discoverSecondaryYear(source, lang, y);
+        totalDiscovered += discovered;
+      }
+    }
+
+    const candidates = await prisma.ingestionCandidate.findMany({
+      where: {
+        source: source.toUpperCase(),
+        status: { in: ['DISCOVERED', 'FAILED'] },
+      },
+      orderBy: { discoveredAt: 'asc' },
+    });
+
+    const results: IngestionResult[] = [];
+    let processedCount = 0;
+    let newMoviesCreated = 0;
+    let duplicatesMerged = 0;
+
+    for (const candidate of candidates) {
+      const res = await this.processCandidate(candidate.id);
+      results.push(res);
+      processedCount++;
+      if (res.isNewCanonicalMovie) newMoviesCreated++;
+      if (res.isDuplicate) duplicatesMerged++;
+    }
+
+    return {
+      source: source.toUpperCase(),
+      totalDiscovered,
+      totalProcessed: processedCount,
+      newMoviesCreated,
+      duplicatesMerged,
       results,
     };
   }
