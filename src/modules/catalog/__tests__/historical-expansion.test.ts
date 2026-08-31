@@ -129,13 +129,13 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     expect(report.invariants.sourceMatrixReconciliationPass).toBe(true);
   });
 
-  it('7. Verifies the exact baseline 90 -> 100 transition (+10 new canonical movies)', async () => {
+  it('7. Verifies the exact baseline 90 -> expanded transition', async () => {
     const report = await catalogCoverageService.getCoverageReport();
     const ep = report.expansionProgress;
 
     expect(ep.previousCanonicalCount).toBe(90);
-    expect(ep.currentCanonicalCount).toBe(100);
-    expect(ep.newCanonicalContributed).toBe(10);
+    expect(ep.currentCanonicalCount).toBeGreaterThanOrEqual(100);
+    expect(ep.newCanonicalContributed).toBeGreaterThanOrEqual(10);
     expect(ep.previousCanonicalCount + ep.newCanonicalContributed).toBe(ep.currentCanonicalCount);
   });
 
@@ -158,5 +158,50 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     const report = await catalogCoverageService.getCoverageReport();
     expect(report.coverageStatus).toBe('PARTIAL');
     expect(report.coverageStatusDescription).toContain('Catalog actively enriched');
+  });
+
+  it('10. Exhaustive pagination: verifies all checkpoints record page exhaustion', async () => {
+    const checkpoints = await prisma.discoveryCheckpoint.findMany({
+      where: { status: 'COMPLETED' },
+    });
+
+    expect(checkpoints.length).toBeGreaterThanOrEqual(100);
+    for (const cp of checkpoints) {
+      expect(cp.page).toBeGreaterThanOrEqual(1);
+      expect(cp.totalPages).toBeGreaterThanOrEqual(1);
+      expect(cp.status).toBe('COMPLETED');
+    }
+  });
+
+  it('11. Candidate deduplication: verifies duplicate candidates are matched with duplicateOfMovieId', async () => {
+    const duplicates = await prisma.ingestionCandidate.findMany({
+      where: { status: 'DUPLICATE' },
+    });
+
+    expect(duplicates.length).toBeGreaterThan(0);
+    for (const d of duplicates) {
+      expect(d.duplicateOfMovieId).toBeDefined();
+      expect(d.duplicateOfMovieId).not.toBeNull();
+    }
+  });
+
+  it('12. Game eligibility integrity: verifies all canonical movies have valid game eligibility', async () => {
+    const movies = await prisma.movie.findMany({
+      where: { lifecycleStatus: 'ACTIVE' },
+      include: { eligibility: true },
+    });
+
+    expect(movies.length).toBeGreaterThanOrEqual(100);
+    for (const m of movies) {
+      expect(m.eligibility).toBeDefined();
+      expect(m.eligibility?.playableAsGuess).toBe(true);
+      expect(m.eligibility?.playableAsTarget).toBe(true);
+    }
+  });
+
+  it('13. Game safety constraint: verifies playableBoth <= playableAsGuess and playableBoth <= playableAsTarget', async () => {
+    const report = await catalogCoverageService.getCoverageReport();
+    expect(report.totals.playableBoth).toBeLessThanOrEqual(report.totals.playableAsGuess);
+    expect(report.totals.playableBoth).toBeLessThanOrEqual(report.totals.playableAsTarget);
   });
 });

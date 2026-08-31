@@ -149,7 +149,8 @@ export class IngestionService {
   async discoverSecondaryYear(
     source = 'WIKIDATA',
     languageCode: 'te' | 'hi',
-    year: number
+    year: number,
+    page = 1
   ): Promise<{ discovered: number; totalPages: number }> {
     const registry = DiscoverySourceRegistry.getInstance();
     const sourceAdapter = registry.getSource(source);
@@ -158,7 +159,7 @@ export class IngestionService {
       return { discovered: 0, totalPages: 0 };
     }
 
-    const res = await sourceAdapter.discover({ language: languageCode, year });
+    const res = await sourceAdapter.discover({ language: languageCode, year, page });
     let discoveredCount = 0;
 
     for (const item of res.results) {
@@ -172,7 +173,7 @@ export class IngestionService {
         create: {
           source: source.toUpperCase(),
           sourceMovieId: item.sourceMovieId,
-          discoveryReason: `Secondary ${source.toUpperCase()} Discovery ${languageCode.toUpperCase()} ${year}`,
+          discoveryReason: `Secondary ${source.toUpperCase()} Discovery ${languageCode.toUpperCase()} ${year} p${page}`,
           status: 'DISCOVERED',
         },
         update: {},
@@ -1251,6 +1252,9 @@ export class IngestionService {
             });
           }
 
+          // If year checkpoint was already completed and resume is enabled, skip re-discovery
+          const isCheckpointAlreadyCompleted = resume && existingCheckpoint?.status === 'COMPLETED';
+
           let discoveredThisBatch = 0;
           let newCandidatesThisBatch = 0;
           let duplicatesThisBatch = 0;
@@ -1260,6 +1264,8 @@ export class IngestionService {
           let validationPass = 0;
           let validationReview = 0;
           let validationRejected = 0;
+          let totalPagesForBatch = existingCheckpoint?.totalPages || 1;
+          let lastProcessedPage = existingCheckpoint?.page || 1;
 
           if (options.onProgress) {
             options.onProgress({
@@ -1275,24 +1281,60 @@ export class IngestionService {
             });
           }
 
-          // 1. DISCOVERY STAGE
-          try {
-            if (srcUpper === 'TMDB') {
-              let page = 1;
+          // 1. DISCOVERY STAGE (Exhaustive paginated discovery)
+          if (!isCheckpointAlreadyCompleted) {
+            try {
+              let page = resume && existingCheckpoint?.status === 'IN_PROGRESS' ? existingCheckpoint.page : 1;
               let totalPages = 1;
+
               do {
-                const res = await this.discoverYear(lang, year, page);
+                let res = { discovered: 0, totalPages: 1 };
+                if (srcUpper === 'TMDB') {
+                  res = await this.discoverYear(lang, year, page);
+                } else if (srcUpper === 'WIKIDATA') {
+                  res = await this.discoverSecondaryYear(srcUpper, lang, year, page);
+                }
+
                 discoveredThisBatch += res.discovered;
-                totalPages = res.totalPages;
+                totalPages = Math.max(1, res.totalPages);
+                totalPagesForBatch = totalPages;
+                lastProcessedPage = page;
+
+                // Update in-progress checkpoint state
+                await prisma.discoveryCheckpoint.upsert({
+                  where: {
+                    source_language_year: {
+                      source: srcUpper,
+                      language: lang.toLowerCase(),
+                      year,
+                    },
+                  },
+                  create: {
+                    source: srcUpper,
+                    language: lang.toLowerCase(),
+                    year,
+                    page,
+                    totalPages,
+                    status: page >= totalPages ? 'COMPLETED' : 'IN_PROGRESS',
+                    candidatesFound: discoveredThisBatch,
+                    candidatesSaved: 0,
+                    lastRunAt: new Date(),
+                  },
+                  update: {
+                    page,
+                    totalPages,
+                    status: page >= totalPages ? 'COMPLETED' : 'IN_PROGRESS',
+                    candidatesFound: { increment: res.discovered },
+                    lastRunAt: new Date(),
+                  },
+                });
+
                 page++;
-              } while (page <= totalPages && page <= 5);
-            } else if (srcUpper === 'WIKIDATA') {
-              const res = await this.discoverSecondaryYear(srcUpper, lang, year);
-              discoveredThisBatch += res.discovered;
+              } while (page <= totalPages);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.error(`Discovery error for ${srcUpper} ${lang} ${year}:`, msg);
             }
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`Discovery error for ${srcUpper} ${lang} ${year}:`, msg);
           }
 
           totalDiscovered += discoveredThisBatch;
@@ -1354,7 +1396,7 @@ export class IngestionService {
             }
           }
 
-          // 3. CHECKPOINT PERSISTENCE
+          // 3. CHECKPOINT PERSISTENCE (Mark year exhausted and completed)
           try {
             await prisma.discoveryCheckpoint.upsert({
               where: {
@@ -1368,16 +1410,21 @@ export class IngestionService {
                 source: srcUpper,
                 language: lang.toLowerCase(),
                 year,
-                page: 1,
+                page: lastProcessedPage,
+                totalPages: totalPagesForBatch,
                 status: 'COMPLETED',
                 candidatesFound: discoveredThisBatch,
                 candidatesSaved: newMoviesThisBatch,
+                lastRunAt: new Date(),
                 updatedAt: new Date(),
               },
               update: {
+                page: lastProcessedPage,
+                totalPages: totalPagesForBatch,
                 status: 'COMPLETED',
-                candidatesFound: discoveredThisBatch,
-                candidatesSaved: newMoviesThisBatch,
+                candidatesFound: discoveredThisBatch > 0 ? discoveredThisBatch : undefined,
+                candidatesSaved: newMoviesThisBatch > 0 ? newMoviesThisBatch : undefined,
+                lastRunAt: new Date(),
                 updatedAt: new Date(),
               },
             });

@@ -19,7 +19,7 @@ async function main() {
     endYear: 2026,
     sources: ['TMDB', 'WIKIDATA'],
     languages: ['te', 'hi'],
-    resume: true,
+    resume: process.argv.includes('--resume'),
     onProgress: (p) => {
       if (p.stage === 'CHECKPOINT') {
         console.log(`[CHECKPOINT] ${p.source} ${p.language.toUpperCase()} ${p.year} completed (New Movies: ${p.newMoviesCreated}, Duplicates: ${p.duplicatesMerged})`);

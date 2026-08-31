@@ -1,4 +1,5 @@
 import { DiscoveredMovieSummary, TmdbAdapter } from './tmdb-adapter';
+export type { DiscoveredMovieSummary };
 
 export interface CandidateIdentity {
   source: string;
@@ -62,6 +63,8 @@ export interface DiscoveryOptions {
   language: string; // e.g. 'te' | 'hi'
   year: number;
   page?: number;
+  limit?: number;
+  cursor?: string;
   query?: string;
 }
 
