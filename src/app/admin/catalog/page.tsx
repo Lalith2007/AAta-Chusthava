@@ -38,6 +38,11 @@ export default function AdminCatalogPage() {
   const [runningSecondary, setRunningSecondary] = useState(false);
   const [secondaryFeedback, setSecondaryFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Full Historical Expansion state
+  const [runningExpansion, setRunningExpansion] = useState(false);
+  const [expansionFeedback, setExpansionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [checkpoints, setCheckpoints] = useState<any[]>([]);
+
   const fetchCoverageReport = async () => {
     try {
       setLoading(true);
@@ -49,6 +54,13 @@ export default function AdminCatalogPage() {
       } else {
         setError(json.error?.message || 'Failed to load catalog coverage report.');
       }
+
+      // Also fetch checkpoints
+      const cpRes = await fetch('/api/admin/catalog/checkpoints');
+      const cpJson = await cpRes.json();
+      if (cpJson.success && cpJson.data) {
+        setCheckpoints(cpJson.data);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error');
     } finally {
@@ -59,6 +71,46 @@ export default function AdminCatalogPage() {
   useEffect(() => {
     fetchCoverageReport();
   }, []);
+
+  const handleRunHistoricalExpansion = async () => {
+    try {
+      setRunningExpansion(true);
+      setExpansionFeedback(null);
+      const res = await fetch('/api/admin/catalog/expand-historical', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startYear: 2002,
+          endYear: 2026,
+          sources: ['TMDB', 'WIKIDATA'],
+          languages: ['te', 'hi'],
+          resume: true,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.data) {
+        const d = json.data;
+        setExpansionFeedback({
+          type: 'success',
+          message: `Full Historical Expansion Completed: ${d.totalDiscovered} candidates discovered, ${d.totalProcessed} processed, +${d.newCanonicalMoviesAdded} new canonical movies added (${d.previousCanonicalCount} → ${d.currentCanonicalCount} total canonical movies, ${d.totalDuplicatesMerged} duplicates merged).`,
+        });
+        await fetchCoverageReport();
+      } else {
+        setExpansionFeedback({
+          type: 'error',
+          message: json.error || 'Historical catalog expansion failed.',
+        });
+      }
+    } catch (err: unknown) {
+      setExpansionFeedback({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Network error',
+      });
+    } finally {
+      setRunningExpansion(false);
+    }
+  };
 
   const handleIngestMissing = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,14 +219,22 @@ export default function AdminCatalogPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleRunHistoricalExpansion}
+              disabled={runningExpansion || loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 text-sm font-bold rounded-xl shadow-lg transition disabled:opacity-50"
+            >
+              <Sparkles className={`w-4 h-4 ${runningExpansion ? 'animate-spin' : ''}`} />
+              {runningExpansion ? 'Expanding 2002–2026...' : 'Run Full Historical Expansion'}
+            </button>
             <button
               onClick={handleRunSecondaryDiscovery}
               disabled={runningSecondary || loading}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-semibold rounded-xl border border-indigo-500/30 transition shadow-md disabled:opacity-50"
             >
               <Sparkles className={`w-4 h-4 ${runningSecondary ? 'animate-spin text-amber-300' : ''}`} />
-              {runningSecondary ? 'Expanding Wikidata...' : 'Run Wikidata Expansion (2002–2026)'}
+              {runningSecondary ? 'Expanding...' : 'Wikidata Only'}
             </button>
             <button
               onClick={fetchCoverageReport}
@@ -182,10 +242,27 @@ export default function AdminCatalogPage() {
               className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-xl border border-slate-700 transition shadow-sm"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
-              Refresh Metrics
+              Refresh
             </button>
           </div>
         </div>
+
+        {expansionFeedback && (
+          <div
+            className={`p-4 rounded-2xl border text-sm flex items-center gap-3 ${
+              expansionFeedback.type === 'success'
+                ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                : 'bg-rose-950/60 border-rose-800 text-rose-300'
+            }`}
+          >
+            {expansionFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            )}
+            <span>{expansionFeedback.message}</span>
+          </div>
+        )}
 
         {secondaryFeedback && (
           <div
@@ -687,6 +764,61 @@ export default function AdminCatalogPage() {
                 </form>
               </div>
             </div>
+
+            {/* Section: Discovery Checkpoints & Resumability */}
+            {checkpoints.length > 0 && (
+              <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-amber-400" />
+                      Discovery Checkpoints & Resumability Ledger
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Stateful checkpoints enabling fault-tolerant, resumable historical expansion across sources, languages, and years.
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-xs font-bold">
+                    {checkpoints.length} Checkpoints Recorded
+                  </span>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto rounded-2xl border border-slate-800">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-950/80 text-slate-400 font-semibold sticky top-0 border-b border-slate-800">
+                      <tr>
+                        <th className="py-2.5 px-4">Source</th>
+                        <th className="py-2.5 px-4">Language</th>
+                        <th className="py-2.5 px-4 text-center">Year</th>
+                        <th className="py-2.5 px-4 text-center">Found</th>
+                        <th className="py-2.5 px-4 text-center">Canonical Saved</th>
+                        <th className="py-2.5 px-4 text-center">Status</th>
+                        <th className="py-2.5 px-4 text-right">Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 bg-slate-950/30">
+                      {checkpoints.map((cp) => (
+                        <tr key={cp.id} className="hover:bg-slate-900/60 transition-colors">
+                          <td className="py-2 px-4 font-mono font-bold text-amber-400">{cp.source}</td>
+                          <td className="py-2 px-4 uppercase text-slate-300">{cp.language}</td>
+                          <td className="py-2 px-4 text-center font-bold text-slate-200">{cp.year}</td>
+                          <td className="py-2 px-4 text-center text-sky-400 font-semibold">{cp.candidatesFound}</td>
+                          <td className="py-2 px-4 text-center text-emerald-400 font-semibold">{cp.candidatesSaved}</td>
+                          <td className="py-2 px-4 text-center">
+                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                              {cp.status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-4 text-right text-slate-500 font-mono text-[11px]">
+                            {new Date(cp.updatedAt).toLocaleTimeString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Section 6: Audit Metadata & Timelines */}
             <div className="bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6 shadow-md">

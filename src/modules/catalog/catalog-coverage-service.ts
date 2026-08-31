@@ -51,6 +51,15 @@ export interface SourceComparisonReport {
   newCanonicalContributedBySecondary: number;
 }
 
+export interface ExpansionProgressReport {
+  previousCanonicalCount: number;
+  newCanonicalContributed: number;
+  currentCanonicalCount: number;
+  unresolvedCandidates: number;
+  reviewQueueCount: number;
+  totalCheckpointsCompleted: number;
+}
+
 export interface CatalogCoverageReport {
   totals: {
     totalMovies: number;
@@ -69,6 +78,7 @@ export interface CatalogCoverageReport {
   yearBreakdown: YearCoverageItem[];
   sourceBreakdown: SourceCoverageItem[];
   sourceComparison: SourceComparisonReport;
+  expansionProgress: ExpansionProgressReport;
   coverageStatus: CoverageStatus;
   coverageStatusDescription: string;
   auditMetadata: {
@@ -335,6 +345,25 @@ export class CatalogCoverageService {
     const yearTargetsReconciled = sumYearTargets === playableAsTarget;
     const playableBothConsistent = playableBoth <= playableAsGuess && playableBoth <= playableAsTarget;
 
+    // Checkpoints
+    const checkpoints = await prisma.discoveryCheckpoint.findMany({
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const baselineCanonicalCount = 90;
+    const newCanonicalContributed = Math.max(0, totalMovies - baselineCanonicalCount);
+    const unresolvedCandidates = candidates.filter((c) => ['DISCOVERED', 'PROCESSING'].includes(c.status)).length;
+    const reviewQueueCount = needsReview + validationRequired;
+
+    const expansionProgress: ExpansionProgressReport = {
+      previousCanonicalCount: baselineCanonicalCount,
+      newCanonicalContributed,
+      currentCanonicalCount: totalMovies,
+      unresolvedCandidates,
+      reviewQueueCount,
+      totalCheckpointsCompleted: checkpoints.filter((c) => c.status === 'COMPLETED').length,
+    };
+
     // 6. Audit Metadata
     const oldestMovie = movies.length > 0 ? { title: movies[0].primaryTitle, year: movies[0].releaseYear } : null;
     const newestMovie =
@@ -368,6 +397,7 @@ export class CatalogCoverageService {
       yearBreakdown,
       sourceBreakdown,
       sourceComparison,
+      expansionProgress,
       coverageStatus: 'PARTIAL',
       coverageStatusDescription:
         'Catalog actively enriched by primary (TMDB) and secondary (Wikidata Open Knowledge Graph) discovery sources across 2002–2026. Continuous multi-source expansion pipeline ready for progressive discovery.',

@@ -15,6 +15,59 @@ export interface IngestionResult {
   isDuplicate?: boolean;
 }
 
+export interface HistoricalExpansionOptions {
+  startYear?: number;
+  endYear?: number;
+  sources?: string[];
+  languages?: Array<'te' | 'hi'>;
+  resume?: boolean;
+  onProgress?: (progress: {
+    year: number;
+    source: string;
+    language: string;
+    stage: 'DISCOVERING' | 'INGESTING' | 'CHECKPOINT';
+    discovered: number;
+    processed: number;
+    newMoviesCreated: number;
+    duplicatesMerged: number;
+    message?: string;
+  }) => void;
+}
+
+export interface YearLanguageSourceStat {
+  year: number;
+  source: string;
+  language: string;
+  discovered: number;
+  alreadyKnown: number;
+  newCandidates: number;
+  duplicates: number;
+  enrichedSuccess: number;
+  enrichedFailed: number;
+  validationPass: number;
+  validationReview: number;
+  validationRejected: number;
+  newCanonicalMovies: number;
+}
+
+export interface HistoricalExpansionReport {
+  startYear: number;
+  endYear: number;
+  sources: string[];
+  languages: string[];
+  previousCanonicalCount: number;
+  newCanonicalMoviesAdded: number;
+  currentCanonicalCount: number;
+  totalDiscovered: number;
+  totalProcessed: number;
+  totalDuplicatesMerged: number;
+  totalReviewRequired: number;
+  totalFailed: number;
+  stats: YearLanguageSourceStat[];
+  checkpointsSaved: number;
+  durationMs: number;
+}
+
 export class IngestionService {
   constructor(private sourceAdapter: MovieDataSource = tmdbAdapter) {}
 
@@ -70,24 +123,22 @@ export class IngestionService {
 
     let discoveredCount = 0;
     for (const item of res.results) {
-      const existing = await prisma.ingestionCandidate.findUnique({
+      const candidate = await prisma.ingestionCandidate.upsert({
         where: {
           source_sourceMovieId: {
             source: 'TMDB',
             sourceMovieId: item.sourceMovieId,
           },
         },
+        create: {
+          source: 'TMDB',
+          sourceMovieId: item.sourceMovieId,
+          discoveryReason: `Discovery ${languageCode.toUpperCase()} ${year} p${page}`,
+          status: 'DISCOVERED',
+        },
+        update: {},
       });
-
-      if (!existing) {
-        await prisma.ingestionCandidate.create({
-          data: {
-            source: 'TMDB',
-            sourceMovieId: item.sourceMovieId,
-            discoveryReason: `Discovery ${languageCode.toUpperCase()} ${year} p${page}`,
-            status: 'DISCOVERED',
-          },
-        });
+      if (candidate.status === 'DISCOVERED') {
         discoveredCount++;
       }
     }
@@ -111,24 +162,22 @@ export class IngestionService {
     let discoveredCount = 0;
 
     for (const item of res.results) {
-      const existing = await prisma.ingestionCandidate.findUnique({
+      const candidate = await prisma.ingestionCandidate.upsert({
         where: {
           source_sourceMovieId: {
             source: source.toUpperCase(),
             sourceMovieId: item.sourceMovieId,
           },
         },
+        create: {
+          source: source.toUpperCase(),
+          sourceMovieId: item.sourceMovieId,
+          discoveryReason: `Secondary ${source.toUpperCase()} Discovery ${languageCode.toUpperCase()} ${year}`,
+          status: 'DISCOVERED',
+        },
+        update: {},
       });
-
-      if (!existing) {
-        await prisma.ingestionCandidate.create({
-          data: {
-            source: source.toUpperCase(),
-            sourceMovieId: item.sourceMovieId,
-            discoveryReason: `Secondary ${source.toUpperCase()} Discovery ${languageCode.toUpperCase()} ${year}`,
-            status: 'DISCOVERED',
-          },
-        });
+      if (candidate.status === 'DISCOVERED') {
         discoveredCount++;
       }
     }
@@ -700,6 +749,29 @@ export class IngestionService {
         });
       }
 
+      // Guarantee GameEligibility is present for the matched canonical movie
+      const hasDirector = record.directors.length > 0;
+      const hasCast = record.cast.length >= 2;
+      const isTargetPlayable = hasDirector && hasCast && !!matchedMovie.releaseYear;
+
+      await prisma.gameEligibility.upsert({
+        where: { movieId: matchedMovie.id },
+        create: {
+          movieId: matchedMovie.id,
+          playableAsGuess: true,
+          playableAsTarget: isTargetPlayable,
+          minimumMetadataComplete: hasDirector && hasCast,
+          reviewStatus: isTargetPlayable ? 'APPROVED' : 'PENDING',
+          updatedAt: new Date(),
+        },
+        update: {
+          playableAsGuess: true,
+          playableAsTarget: isTargetPlayable,
+          minimumMetadataComplete: hasDirector && hasCast,
+          updatedAt: new Date(),
+        },
+      });
+
       await prisma.ingestionCandidate.update({
         where: { id: candidate.id },
         data: {
@@ -723,6 +795,29 @@ export class IngestionService {
     }
 
     // 3. NEW CANONICAL MOVIE CREATION (from secondary source)
+    const existingMovieFinal = await prisma.movie.findUnique({ where: { slug } });
+    if (existingMovieFinal) {
+      await prisma.ingestionCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'DUPLICATE',
+          rawSourceRecordId: rawRecord.id,
+          processedAt: new Date(),
+          resolutionReason: 'DUPLICATE_CANONICAL_MATCH',
+          duplicateOfMovieId: existingMovieFinal.id,
+        },
+      });
+      return {
+        candidateId: candidate.id,
+        movieId: existingMovieFinal.id,
+        status: 'PROCESSED',
+        title: existingMovieFinal.primaryTitle,
+        isNewCanonicalMovie: false,
+        isDuplicate: true,
+        reason: 'Duplicate matched concurrently',
+      };
+    }
+
     isNewMovie = true;
     const boxOffice = record.revenue && record.revenue > 0 ? record.revenue : null;
     const boxOfficeStatus = boxOffice ? 'REPORTED' : 'UNKNOWN';
@@ -1089,6 +1184,239 @@ export class IngestionService {
     };
   }
 
+  async runHistoricalCatalogExpansion(options: HistoricalExpansionOptions = {}): Promise<HistoricalExpansionReport> {
+    const startTime = Date.now();
+    const startYear = options.startYear || 2002;
+    const currentYear = new Date().getFullYear();
+    const endYear = options.endYear || (currentYear >= 2026 ? currentYear : 2026);
+    const sources = options.sources && options.sources.length > 0 ? options.sources : ['TMDB', 'WIKIDATA'];
+    const languages: Array<'te' | 'hi'> = options.languages && options.languages.length > 0 ? options.languages : ['te', 'hi'];
+    const resume = options.resume !== false;
+
+    const previousCanonicalCount = await prisma.movie.count();
+    const stats: YearLanguageSourceStat[] = [];
+
+    let totalDiscovered = 0;
+    let totalProcessed = 0;
+    let totalNewCanonicalMovies = 0;
+    let totalDuplicatesMerged = 0;
+    let totalReviewRequired = 0;
+    let totalFailed = 0;
+    let checkpointsSaved = 0;
+
+    for (let year = startYear; year <= endYear; year++) {
+      for (const source of sources) {
+        const srcUpper = source.toUpperCase();
+        for (const lang of languages) {
+          // Checkpoint checking for resumability
+          let existingCheckpoint = null;
+          if (resume) {
+            existingCheckpoint = await prisma.discoveryCheckpoint.findUnique({
+              where: {
+                source_language_year: {
+                  source: srcUpper,
+                  language: lang.toLowerCase(),
+                  year,
+                },
+              },
+            });
+          }
+
+          let discoveredThisBatch = 0;
+          let newCandidatesThisBatch = 0;
+          let duplicatesThisBatch = 0;
+          let newMoviesThisBatch = 0;
+          let enrichedSuccess = 0;
+          let enrichedFailed = 0;
+          let validationPass = 0;
+          let validationReview = 0;
+          let validationRejected = 0;
+
+          if (options.onProgress) {
+            options.onProgress({
+              year,
+              source: srcUpper,
+              language: lang,
+              stage: 'DISCOVERING',
+              discovered: totalDiscovered,
+              processed: totalProcessed,
+              newMoviesCreated: totalNewCanonicalMovies,
+              duplicatesMerged: totalDuplicatesMerged,
+              message: `Discovering ${srcUpper} ${lang.toUpperCase()} for ${year}...`,
+            });
+          }
+
+          // 1. DISCOVERY STAGE
+          try {
+            if (srcUpper === 'TMDB') {
+              let page = 1;
+              let totalPages = 1;
+              do {
+                const res = await this.discoverYear(lang, year, page);
+                discoveredThisBatch += res.discovered;
+                totalPages = res.totalPages;
+                page++;
+              } while (page <= totalPages && page <= 5);
+            } else if (srcUpper === 'WIKIDATA') {
+              const res = await this.discoverSecondaryYear(srcUpper, lang, year);
+              discoveredThisBatch += res.discovered;
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`Discovery error for ${srcUpper} ${lang} ${year}:`, msg);
+          }
+
+          totalDiscovered += discoveredThisBatch;
+
+          // 2. INGESTION & PROCESSING STAGE
+          if (options.onProgress) {
+            options.onProgress({
+              year,
+              source: srcUpper,
+              language: lang,
+              stage: 'INGESTING',
+              discovered: totalDiscovered,
+              processed: totalProcessed,
+              newMoviesCreated: totalNewCanonicalMovies,
+              duplicatesMerged: totalDuplicatesMerged,
+              message: `Processing candidates for ${srcUpper} ${lang.toUpperCase()} ${year}...`,
+            });
+          }
+
+          const candidatesToProcess = await prisma.ingestionCandidate.findMany({
+            where: {
+              source: srcUpper,
+              discoveryReason: { contains: `${year}` },
+              status: { in: ['DISCOVERED', 'FAILED'] },
+            },
+          });
+
+          for (const candidate of candidatesToProcess) {
+            try {
+              const res = await this.processCandidate(candidate.id);
+              totalProcessed++;
+
+              if (res.status === 'PROCESSED') {
+                enrichedSuccess++;
+                validationPass++;
+              } else if (res.status === 'REVIEW_REQUIRED') {
+                enrichedSuccess++;
+                validationReview++;
+                totalReviewRequired++;
+              } else if (res.status === 'SKIPPED') {
+                validationRejected++;
+              } else {
+                enrichedFailed++;
+                totalFailed++;
+              }
+
+              if (res.isNewCanonicalMovie) {
+                newMoviesThisBatch++;
+                totalNewCanonicalMovies++;
+              }
+              if (res.isDuplicate) {
+                duplicatesThisBatch++;
+                totalDuplicatesMerged++;
+              }
+            } catch (err: unknown) {
+              enrichedFailed++;
+              totalFailed++;
+              console.error(`Candidate processing error [${candidate.id}]:`, err);
+            }
+          }
+
+          // 3. CHECKPOINT PERSISTENCE
+          try {
+            await prisma.discoveryCheckpoint.upsert({
+              where: {
+                source_language_year: {
+                  source: srcUpper,
+                  language: lang.toLowerCase(),
+                  year,
+                },
+              },
+              create: {
+                source: srcUpper,
+                language: lang.toLowerCase(),
+                year,
+                page: 1,
+                status: 'COMPLETED',
+                candidatesFound: discoveredThisBatch,
+                candidatesSaved: newMoviesThisBatch,
+                updatedAt: new Date(),
+              },
+              update: {
+                status: 'COMPLETED',
+                candidatesFound: discoveredThisBatch,
+                candidatesSaved: newMoviesThisBatch,
+                updatedAt: new Date(),
+              },
+            });
+            checkpointsSaved++;
+          } catch (err) {
+            console.error(`Checkpoint save error for ${srcUpper} ${lang} ${year}:`, err);
+          }
+
+          stats.push({
+            year,
+            source: srcUpper,
+            language: lang.toUpperCase(),
+            discovered: discoveredThisBatch,
+            alreadyKnown: existingCheckpoint ? existingCheckpoint.candidatesFound : 0,
+            newCandidates: discoveredThisBatch,
+            duplicates: duplicatesThisBatch,
+            enrichedSuccess,
+            enrichedFailed,
+            validationPass,
+            validationReview,
+            validationRejected,
+            newCanonicalMovies: newMoviesThisBatch,
+          });
+        }
+      }
+    }
+
+    // Final cleanup pass for any un-categorized pending candidates
+    const remainingCandidates = await prisma.ingestionCandidate.findMany({
+      where: {
+        status: { in: ['DISCOVERED', 'FAILED'] },
+      },
+    });
+
+    for (const candidate of remainingCandidates) {
+      try {
+        const res = await this.processCandidate(candidate.id);
+        totalProcessed++;
+        if (res.isNewCanonicalMovie) totalNewCanonicalMovies++;
+        if (res.isDuplicate) totalDuplicatesMerged++;
+      } catch (err: unknown) {
+        totalFailed++;
+        console.error(`Cleanup candidate processing error [${candidate.id}]:`, err);
+      }
+    }
+
+    const currentCanonicalCount = await prisma.movie.count();
+    const durationMs = Date.now() - startTime;
+
+    return {
+      startYear,
+      endYear,
+      sources,
+      languages: languages.map((l) => l.toUpperCase()),
+      previousCanonicalCount,
+      newCanonicalMoviesAdded: currentCanonicalCount - previousCanonicalCount,
+      currentCanonicalCount,
+      totalDiscovered,
+      totalProcessed,
+      totalDuplicatesMerged,
+      totalReviewRequired,
+      totalFailed,
+      stats,
+      checkpointsSaved,
+      durationMs,
+    };
+  }
+
   async runHistoricalBatch(startYear = 2002, endYear = 2026) {
     const job = await queueService.enqueue('DISCOVER_RELEASES', { startYear, endYear });
     return job;
@@ -1096,3 +1424,4 @@ export class IngestionService {
 }
 
 export const ingestionService = new IngestionService();
+
