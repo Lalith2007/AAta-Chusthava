@@ -94,7 +94,7 @@ export const WIKIDATA_HISTORICAL_CATALOG: WikidataMovieRecord[] = [
     rating: 8.7,
     voteCount: 22000,
     posterUrl: 'https://image.tmdb.org/t/p/w500/rrr_poster.jpg',
-    tmdbId: 202201,
+    tmdbId: 579974,
     imdbId: 'tt8178634',
     genres: [{ name: 'Action' }, { name: 'Drama' }],
     productionCompanies: [{ name: 'DVV Entertainment', country: 'IN' }],
