@@ -283,6 +283,84 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 200211,
+      "title": "Devdas",
+      "original_title": "देवदास",
+      "original_language": "hi",
+      "overview": "After his wealthy family prohibits him from marrying the woman he loves, Devdas turns to alcohol and seeks solace with a courtesan.",
+      "release_date": "2002-07-12",
+      "runtime": 185,
+      "budget": 500000000,
+      "revenue": 1020000000,
+      "vote_average": 7.9,
+      "vote_count": 14000,
+      "poster_path": "/devdas_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 102,
+          "name": "Mega Bollywood"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200211,
+      "cast": [
+        {
+          "id": 1008,
+          "name": "Shah Rukh Khan",
+          "original_name": "Shah Rukh Khan",
+          "character": "Devdas Mukherjee",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1009,
+          "name": "Aishwarya Rai Bachchan",
+          "original_name": "Aishwarya Rai Bachchan",
+          "character": "Parvati (Paro)",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1010,
+          "name": "Madhuri Dixit",
+          "original_name": "Madhuri Dixit",
+          "character": "Chandramukhi",
+          "order": 2,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2005,
+          "name": "Sanjay Leela Bhansali",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2006,
+          "name": "Ismail Darbar",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Devdas 2002"
+    ]
+  },
+  {
+    "details": {
       "id": 200201,
       "title": "Indra",
       "original_title": "ఇంద్ర",
@@ -354,6 +432,84 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
           "character": "Pandit",
           "order": 4,
           "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2001,
+          "name": "B. Gopal",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2002,
+          "name": "Mani Sharma",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Indrasena Reddy"
+    ]
+  },
+  {
+    "details": {
+      "id": 200210,
+      "title": "Indra",
+      "original_title": "ఇంద్ర",
+      "original_language": "te",
+      "overview": "Indrasena Reddy returns from Varanasi to the drought-ridden Rayalaseema to end centuries of factional bloodshed and build a reservoir.",
+      "release_date": "2002-07-24",
+      "runtime": 174,
+      "budget": 100000000,
+      "revenue": 330000000,
+      "vote_average": 8.3,
+      "vote_count": 8500,
+      "poster_path": "/indra_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 101,
+          "name": "Vyjayanthi Movies"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200210,
+      "cast": [
+        {
+          "id": 1001,
+          "name": "Chiranjeevi",
+          "original_name": "Chiranjeevi",
+          "character": "Indrasena Reddy / Shankar Narayana",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1002,
+          "name": "Aarti Agarwal",
+          "original_name": "Aarti Agarwal",
+          "character": "Snehalatha Reddy",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1003,
+          "name": "Sonali Bendre",
+          "original_name": "Sonali Bendre",
+          "character": "Pallavi",
+          "order": 2,
+          "gender": 1
         }
       ],
       "crew": [
@@ -644,6 +800,88 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 200212,
+      "title": "Saathiya",
+      "original_title": "साथिया",
+      "original_language": "hi",
+      "overview": "Aditya and Suhani elope and begin their married life in Mumbai, only to find that living together poses unexpected emotional challenges.",
+      "release_date": "2002-12-20",
+      "runtime": 138,
+      "budget": 70000000,
+      "revenue": 290000000,
+      "vote_average": 7.6,
+      "vote_count": 6200,
+      "poster_path": "/saathiya_poster.jpg",
+      "genres": [
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 103,
+          "name": "Yash Raj Films"
+        },
+        {
+          "id": 104,
+          "name": "Madras Talkies"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200212,
+      "cast": [
+        {
+          "id": 1011,
+          "name": "Vivek Oberoi",
+          "original_name": "Vivek Oberoi",
+          "character": "Aditya Sehgal",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1012,
+          "name": "Rani Mukerji",
+          "original_name": "Rani Mukerji",
+          "character": "Suhani Sharma",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1013,
+          "name": "Tanuja",
+          "original_name": "Tanuja",
+          "character": "Shobhana Sharma",
+          "order": 2,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2007,
+          "name": "Shaad Ali",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2008,
+          "name": "A. R. Rahman",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Saathiya Romance"
+    ]
+  },
+  {
+    "details": {
       "id": 200301,
       "title": "Okkadu",
       "original_title": "ఒక్కడు",
@@ -730,6 +968,84 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "The One"
+    ]
+  },
+  {
+    "details": {
+      "id": 200310,
+      "title": "Okkadu",
+      "original_title": "ఒక్కడు",
+      "original_language": "te",
+      "overview": "A state-level Kabaddi player visiting Kurnool rescues a young woman from a tyrannical factionist politician and shelters her in Charminar, Hyderabad.",
+      "release_date": "2003-01-15",
+      "runtime": 170,
+      "budget": 140000000,
+      "revenue": 350000000,
+      "vote_average": 8.4,
+      "vote_count": 12000,
+      "poster_path": "/okkadu_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 105,
+          "name": "Sumanth Art Productions"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200310,
+      "cast": [
+        {
+          "id": 1014,
+          "name": "Mahesh Babu",
+          "original_name": "Mahesh Babu",
+          "character": "Ajay Varma",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1015,
+          "name": "Bhoomika Chawla",
+          "original_name": "Bhoomika Chawla",
+          "character": "Swapna Reddy",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1016,
+          "name": "Prakash Raj",
+          "original_name": "Prakash Raj",
+          "character": "Obul Reddy",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2009,
+          "name": "Gunasekhar",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2002,
+          "name": "Mani Sharma",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Okkadu The One"
     ]
   },
   {
@@ -824,6 +1140,84 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Simhadri 2003"
+    ]
+  },
+  {
+    "details": {
+      "id": 200311,
+      "title": "Simhadri",
+      "original_title": "సింహాద్రి",
+      "original_language": "te",
+      "overview": "An orphan raised as a loyal family servant in Visakhapatnam hides his violent alter-ego as Samarasimha Reddy of Rayalaseema.",
+      "release_date": "2003-07-09",
+      "runtime": 165,
+      "budget": 85000000,
+      "revenue": 300000000,
+      "vote_average": 8.1,
+      "vote_count": 9500,
+      "poster_path": "/simhadri_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 106,
+          "name": "VMC Productions"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200311,
+      "cast": [
+        {
+          "id": 1017,
+          "name": "N. T. Rama Rao Jr.",
+          "original_name": "N. T. Rama Rao Jr.",
+          "character": "Simhadri / Singamalai",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1015,
+          "name": "Bhoomika Chawla",
+          "original_name": "Bhoomika Chawla",
+          "character": "Indu",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1018,
+          "name": "Ankitha",
+          "original_name": "Ankitha",
+          "character": "Kasthuri",
+          "order": 2,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2016,
+          "name": "S. S. Rajamouli",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2017,
+          "name": "M. M. Keeravani",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Simhadri Singamalai"
     ]
   },
   {
@@ -1094,6 +1488,178 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 200411,
+      "title": "Malliswari",
+      "original_title": "మల్లీశ్వరి",
+      "original_language": "te",
+      "overview": "A carefree bank manager falls in love with the heiress to the royal estate of Mirzapur, protecting her from assassins attempting to usurp her fortune.",
+      "release_date": "2004-02-18",
+      "runtime": 165,
+      "budget": 80000000,
+      "revenue": 240000000,
+      "vote_average": 8,
+      "vote_count": 7500,
+      "poster_path": "/malliswari_poster.jpg",
+      "genres": [
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 28,
+          "name": "Action"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 108,
+          "name": "Suresh Productions"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200411,
+      "cast": [
+        {
+          "id": 1022,
+          "name": "Venkatesh",
+          "original_name": "Venkatesh",
+          "character": "Prasad",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1023,
+          "name": "Katrina Kaif",
+          "original_name": "Katrina Kaif",
+          "character": "Princess Malliswari Devi",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1005,
+          "name": "Brahmanandam",
+          "original_name": "Brahmanandam",
+          "character": "Balu",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2020,
+          "name": "K. Vijaya Bhaskar",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2021,
+          "name": "Koti",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Malliswari Telugu"
+    ]
+  },
+  {
+    "details": {
+      "id": 200410,
+      "title": "Main Hoon Na",
+      "original_title": "मैं हूँ ना",
+      "original_language": "hi",
+      "overview": "An army major goes undercover as a college student to protect a general’s daughter from rogue terrorists while reconciling with his estranged stepbrother.",
+      "release_date": "2004-04-30",
+      "runtime": 179,
+      "budget": 250000000,
+      "revenue": 840000000,
+      "vote_average": 7.7,
+      "vote_count": 11000,
+      "poster_path": "/main_hoon_na_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 107,
+          "name": "Red Chillies Entertainment"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200410,
+      "cast": [
+        {
+          "id": 1008,
+          "name": "Shah Rukh Khan",
+          "original_name": "Shah Rukh Khan",
+          "character": "Major Ram Prasad Sharma",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1019,
+          "name": "Sushmita Sen",
+          "original_name": "Sushmita Sen",
+          "character": "Chandni Chopra",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1020,
+          "name": "Suniel Shetty",
+          "original_name": "Suniel Shetty",
+          "character": "Raghavan Datta",
+          "order": 2,
+          "gender": 2
+        },
+        {
+          "id": 1021,
+          "name": "Zayed Khan",
+          "original_name": "Zayed Khan",
+          "character": "Laxman Prasad Sharma (Lucky)",
+          "order": 3,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2018,
+          "name": "Farah Khan",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2019,
+          "name": "Anu Malik",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "I Am Here"
+    ]
+  },
+  {
+    "details": {
       "id": 200401,
       "title": "Arya",
       "original_title": "ఆర్య",
@@ -1360,6 +1926,88 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 200510,
+      "title": "Nuvvostanante Nenoddantana",
+      "original_title": "నువ్వొస్తానంటే నేనొద్దంటానా",
+      "original_language": "te",
+      "overview": "A wealthy NRI bachelor challenges a proud rural farmer to work on his paddy fields in order to win the hand of the farmer’s sister.",
+      "release_date": "2005-01-14",
+      "runtime": 164,
+      "budget": 70000000,
+      "revenue": 280000000,
+      "vote_average": 8.2,
+      "vote_count": 8800,
+      "poster_path": "/nvnv_poster.jpg",
+      "genres": [
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 105,
+          "name": "Sumanth Art Productions"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200510,
+      "cast": [
+        {
+          "id": 1024,
+          "name": "Siddharth",
+          "original_name": "Siddharth",
+          "character": "Santosh",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1025,
+          "name": "Trisha Krishnan",
+          "original_name": "Trisha Krishnan",
+          "character": "Siri",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1016,
+          "name": "Srihari",
+          "original_name": "Srihari",
+          "character": "Sivarama Krishna",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2022,
+          "name": "Prabhu Deva",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2004,
+          "name": "Devi Sri Prasad",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "NVNV"
+    ]
+  },
+  {
+    "details": {
       "id": 200502,
       "title": "Black",
       "original_title": "ब्लैक",
@@ -1528,6 +2176,88 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Bunty & Babli"
+    ]
+  },
+  {
+    "details": {
+      "id": 200511,
+      "title": "Parineeta",
+      "original_title": "परिणीता",
+      "original_language": "hi",
+      "overview": "In 1962 Kolkata, childhood sweethearts Shekhar and Lalita are torn apart by social disparity and deceit before finding their way back to love.",
+      "release_date": "2005-06-10",
+      "runtime": 130,
+      "budget": 160000000,
+      "revenue": 330000000,
+      "vote_average": 7.5,
+      "vote_count": 5100,
+      "poster_path": "/parineeta_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 10402,
+          "name": "Music"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 109,
+          "name": "Vinod Chopra Films"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200511,
+      "cast": [
+        {
+          "id": 1026,
+          "name": "Saif Ali Khan",
+          "original_name": "Saif Ali Khan",
+          "character": "Shekhar Roy",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1027,
+          "name": "Vidya Balan",
+          "original_name": "Vidya Balan",
+          "character": "Lalita",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1028,
+          "name": "Sanjay Dutt",
+          "original_name": "Sanjay Dutt",
+          "character": "Girish Sharma",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2023,
+          "name": "Pradeep Sarkar",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2024,
+          "name": "Shantanu Moitra",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "The Married Woman"
     ]
   },
   {
@@ -1712,6 +2442,191 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Paint It Yellow"
+    ]
+  },
+  {
+    "details": {
+      "id": 200610,
+      "title": "Rang De Basanti",
+      "original_title": "रंग दे बसंती",
+      "original_language": "hi",
+      "overview": "A young British filmmaker casts five carefree Delhi university students in a documentary about Indian freedom fighters, awakening their revolutionary spirit.",
+      "release_date": "2006-01-26",
+      "runtime": 167,
+      "budget": 250000000,
+      "revenue": 970000000,
+      "vote_average": 8.4,
+      "vote_count": 18000,
+      "poster_path": "/rdb_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 36,
+          "name": "History"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 110,
+          "name": "ROMP"
+        },
+        {
+          "id": 111,
+          "name": "UTV Motion Pictures"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200610,
+      "cast": [
+        {
+          "id": 1029,
+          "name": "Aamir Khan",
+          "original_name": "Aamir Khan",
+          "character": "Daljit Singh (DJ) / Chandrashekhar Azad",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1024,
+          "name": "Siddharth",
+          "original_name": "Siddharth",
+          "character": "Karan Singhania / Bhagat Singh",
+          "order": 1,
+          "gender": 2
+        },
+        {
+          "id": 1030,
+          "name": "Sharman Joshi",
+          "original_name": "Sharman Joshi",
+          "character": "Sukhi / Rajguru",
+          "order": 2,
+          "gender": 2
+        },
+        {
+          "id": 1031,
+          "name": "Kunal Kapoor",
+          "original_name": "Kunal Kapoor",
+          "character": "Aslam / Ashfaqullah Khan",
+          "order": 3,
+          "gender": 2
+        },
+        {
+          "id": 1032,
+          "name": "Soha Ali Khan",
+          "original_name": "Soha Ali Khan",
+          "character": "Sonia / Durga Vohra",
+          "order": 4,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2025,
+          "name": "Rakeysh Omprakash Mehra",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2008,
+          "name": "A. R. Rahman",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Paint It Yellow",
+      "RDB"
+    ]
+  },
+  {
+    "details": {
+      "id": 200611,
+      "title": "Vikramarkudu",
+      "original_title": "విక్రమార్కుడు",
+      "original_language": "te",
+      "overview": "A petty thief in Hyderabad discovers he has an identical lookalike in the form of a ferocious, honest police officer from Chambal fighting cruel landlords.",
+      "release_date": "2006-06-23",
+      "runtime": 165,
+      "budget": 110000000,
+      "revenue": 320000000,
+      "vote_average": 8.1,
+      "vote_count": 8200,
+      "poster_path": "/vikramarkudu_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 112,
+          "name": "Sri Keerthi Creations"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200611,
+      "cast": [
+        {
+          "id": 1033,
+          "name": "Ravi Teja",
+          "original_name": "Ravi Teja",
+          "character": "ASP Vikram Singh Rathore IPS / Athili Sathi Babu",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1034,
+          "name": "Anushka Shetty",
+          "original_name": "Anushka Shetty",
+          "character": "Neeraja Goswami",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1035,
+          "name": "Vineet Kumar",
+          "original_name": "Vineet Kumar",
+          "character": "Bavuji",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2016,
+          "name": "S. S. Rajamouli",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2017,
+          "name": "M. M. Keeravani",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Vikram Rathore IPS"
     ]
   },
   {
@@ -2068,6 +2983,88 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 200711,
+      "title": "Guru",
+      "original_title": "गुरू",
+      "original_language": "hi",
+      "overview": "An ambitious villager from Gujarat migrates to Bombay and builds an industrial textile and petrochemical empire against ruthless establishment monopolies.",
+      "release_date": "2007-01-12",
+      "runtime": 166,
+      "budget": 220000000,
+      "revenue": 830000000,
+      "vote_average": 7.9,
+      "vote_count": 10200,
+      "poster_path": "/guru_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 36,
+          "name": "History"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 104,
+          "name": "Madras Talkies"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200711,
+      "cast": [
+        {
+          "id": 1040,
+          "name": "Abhishek Bachchan",
+          "original_name": "Abhishek Bachchan",
+          "character": "Gurukant Desai (Guru)",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1009,
+          "name": "Aishwarya Rai Bachchan",
+          "original_name": "Aishwarya Rai Bachchan",
+          "character": "Sujata Desai",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1041,
+          "name": "Mithun Chakraborty",
+          "original_name": "Mithun Chakraborty",
+          "character": "Manik Dasgupta (Nanaji)",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2028,
+          "name": "Mani Ratnam",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2008,
+          "name": "A. R. Rahman",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Guru Kant Desai"
+    ]
+  },
+  {
+    "details": {
       "id": 200702,
       "title": "Chak De! India",
       "original_title": "चक दे! इंडिया",
@@ -2252,6 +3249,88 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 200710,
+      "title": "Happy Days",
+      "original_title": "హ్యాపీ డేస్",
+      "original_language": "te",
+      "overview": "Eight engineering students at CBIT in Hyderabad navigate their friendships, first romances, academics, and coming-of-age hurdles across four years.",
+      "release_date": "2007-09-28",
+      "runtime": 153,
+      "budget": 35000000,
+      "revenue": 220000000,
+      "vote_average": 8,
+      "vote_count": 7600,
+      "poster_path": "/happy_days_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 113,
+          "name": "Amigos Creations"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200710,
+      "cast": [
+        {
+          "id": 1037,
+          "name": "Varun Sandesh",
+          "original_name": "Varun Sandesh",
+          "character": "Chandrashekar (Chandu)",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1038,
+          "name": "Tamannaah Bhatia",
+          "original_name": "Tamannaah Bhatia",
+          "character": "Madhu",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1039,
+          "name": "Nikhil Siddharth",
+          "original_name": "Nikhil Siddharth",
+          "character": "Rajesh",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2026,
+          "name": "Sekhar Kammula",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2027,
+          "name": "Mickey J. Meyer",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Happy Days Engineering"
+    ]
+  },
+  {
+    "details": {
       "id": 200703,
       "title": "Taare Zameen Par",
       "original_title": "तारे ज़मीन पर",
@@ -2424,6 +3503,84 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Jodha Akbar"
+    ]
+  },
+  {
+    "details": {
+      "id": 200811,
+      "title": "Gamyam",
+      "original_title": "గమ్యం",
+      "original_language": "te",
+      "overview": "An arrogant rich brat searches for his lost love across Andhra Pradesh in the company of a cheerful, philosophical highway thief.",
+      "release_date": "2008-02-29",
+      "runtime": 135,
+      "budget": 20000000,
+      "revenue": 90000000,
+      "vote_average": 8.2,
+      "vote_count": 6700,
+      "poster_path": "/gamyam_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 12,
+          "name": "Adventure"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 115,
+          "name": "First Frame Entertainment"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200811,
+      "cast": [
+        {
+          "id": 1045,
+          "name": "Allari Naresh",
+          "original_name": "Allari Naresh",
+          "character": "Gaali Seenu",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1046,
+          "name": "Sharwanand",
+          "original_name": "Sharwanand",
+          "character": "Abhiram",
+          "order": 1,
+          "gender": 2
+        },
+        {
+          "id": 1047,
+          "name": "Kamalinee Mukherjee",
+          "original_name": "Kamalinee Mukherjee",
+          "character": "Janaki",
+          "order": 2,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2031,
+          "name": "Radha Krishna Jagarlamudi (Krish)",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2032,
+          "name": "E.S. Murthy",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Gamyam Journey"
     ]
   },
   {
@@ -2604,6 +3761,92 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Ready Telugu"
+    ]
+  },
+  {
+    "details": {
+      "id": 200810,
+      "title": "A Wednesday!",
+      "original_title": "ए वेडनसडे!",
+      "original_language": "hi",
+      "overview": "A retiring Mumbai Police Commissioner recounts the most unforgettable Wednesday of his career when an anonymous caller threatened to blow up the city.",
+      "release_date": "2008-09-05",
+      "runtime": 104,
+      "budget": 50000000,
+      "revenue": 340000000,
+      "vote_average": 8.3,
+      "vote_count": 13500,
+      "poster_path": "/a_wednesday_poster.jpg",
+      "genres": [
+        {
+          "id": 53,
+          "name": "Thriller"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 80,
+          "name": "Crime"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 111,
+          "name": "UTV Motion Pictures"
+        },
+        {
+          "id": 114,
+          "name": "Friday Filmworks"
+        }
+      ]
+    },
+    "credits": {
+      "id": 200810,
+      "cast": [
+        {
+          "id": 1042,
+          "name": "Naseeruddin Shah",
+          "original_name": "Naseeruddin Shah",
+          "character": "The Common Man",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1043,
+          "name": "Anupam Kher",
+          "original_name": "Anupam Kher",
+          "character": "Prakash Rathod",
+          "order": 1,
+          "gender": 2
+        },
+        {
+          "id": 1044,
+          "name": "Jimmy Sheirgill",
+          "original_name": "Jimmy Sheirgill",
+          "character": "Inspector Arif Khan",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2029,
+          "name": "Neeraj Pandey",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2030,
+          "name": "Sanjoy Chowdhury",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "A Wednesday"
     ]
   },
   {
@@ -3771,6 +5014,166 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 201210,
+      "title": "Kahaani",
+      "original_title": "कहानी",
+      "original_language": "hi",
+      "overview": "A pregnant software engineer from London arrives in Kolkata during Durga Puja in search of her missing husband, uncovering a deadly intelligence conspiracy.",
+      "release_date": "2012-03-09",
+      "runtime": 122,
+      "budget": 80000000,
+      "revenue": 1040000000,
+      "vote_average": 8.1,
+      "vote_count": 14500,
+      "poster_path": "/kahaani_poster.jpg",
+      "genres": [
+        {
+          "id": 53,
+          "name": "Thriller"
+        },
+        {
+          "id": 9648,
+          "name": "Mystery"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 116,
+          "name": "Boundscript Motion Pictures"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201210,
+      "cast": [
+        {
+          "id": 1027,
+          "name": "Vidya Balan",
+          "original_name": "Vidya Balan",
+          "character": "Vidya Bagchi",
+          "order": 0,
+          "gender": 1
+        },
+        {
+          "id": 1048,
+          "name": "Parambrata Chatterjee",
+          "original_name": "Parambrata Chatterjee",
+          "character": "Satyoki Sinha (Rana)",
+          "order": 1,
+          "gender": 2
+        },
+        {
+          "id": 1049,
+          "name": "Nawazuddin Siddiqui",
+          "original_name": "Nawazuddin Siddiqui",
+          "character": "A. Khan",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2033,
+          "name": "Sujoy Ghosh",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2034,
+          "name": "Vishal-Shekhar",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Kahaani Mystery"
+    ]
+  },
+  {
+    "details": {
+      "id": 201211,
+      "title": "Gabbar Singh",
+      "original_title": "గబ్బర్ సింగ్",
+      "original_language": "te",
+      "overview": "A flamboyant police inspector named after his favorite movie villain takes charge of Kondaveedu, battling an arrogant local goon aspiring for politics.",
+      "release_date": "2012-05-11",
+      "runtime": 153,
+      "budget": 300000000,
+      "revenue": 1040000000,
+      "vote_average": 7.9,
+      "vote_count": 9800,
+      "poster_path": "/gabbar_singh_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 117,
+          "name": "Parameswara Art Productions"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201211,
+      "cast": [
+        {
+          "id": 1007,
+          "name": "Pawan Kalyan",
+          "original_name": "Pawan Kalyan",
+          "character": "CI Venkataratnam Naidu / Gabbar Singh",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1050,
+          "name": "Shruti Haasan",
+          "original_name": "Shruti Haasan",
+          "character": "Bhagyalakshmi",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1051,
+          "name": "Abhimanyu Singh",
+          "original_name": "Abhimanyu Singh",
+          "character": "Siddhappa Naidu",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2035,
+          "name": "Harish Shankar",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2004,
+          "name": "Devi Sri Prasad",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Gabbar Singh Telugu"
+    ]
+  },
+  {
+    "details": {
       "id": 201203,
       "title": "Gangs of Wasseypur",
       "original_title": "गैंग्स ऑफ वासेपुर",
@@ -4050,6 +5453,96 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 201310,
+      "title": "Mirchi",
+      "original_title": "మిర్చి",
+      "original_language": "te",
+      "overview": "A charismatic architect travels to Palnadu to convert faction rivals into loving families using empathy, love, and courage instead of machetes.",
+      "release_date": "2013-02-08",
+      "runtime": 155,
+      "budget": 300000000,
+      "revenue": 880000000,
+      "vote_average": 8,
+      "vote_count": 10500,
+      "poster_path": "/mirchi_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 118,
+          "name": "UV Creations"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201310,
+      "cast": [
+        {
+          "id": 1039,
+          "name": "Prabhas",
+          "original_name": "Prabhas",
+          "character": "Jai",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1034,
+          "name": "Anushka Shetty",
+          "original_name": "Anushka Shetty",
+          "character": "Vennela",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1052,
+          "name": "Richa Gangopadhyay",
+          "original_name": "Richa Gangopadhyay",
+          "character": "Manasa",
+          "order": 2,
+          "gender": 1
+        },
+        {
+          "id": 1053,
+          "name": "Sathyaraj",
+          "original_name": "Sathyaraj",
+          "character": "Deva",
+          "order": 3,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2036,
+          "name": "Koratala Siva",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2004,
+          "name": "Devi Sri Prasad",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Mirchi Prabhas"
+    ]
+  },
+  {
+    "details": {
       "id": 201302,
       "title": "Yeh Jawaani Hai Deewani",
       "original_title": "ये जवानी है दीवानी",
@@ -4136,6 +5629,84 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "YJHD"
+    ]
+  },
+  {
+    "details": {
+      "id": 201311,
+      "title": "Bhaag Milkha Bhaag",
+      "original_title": "भाग मिल्खा भाग",
+      "original_language": "hi",
+      "overview": "The inspiring true story of the Flying Sikh, Milkha Singh, who overcame the horrors of Partition to become an Olympic world-record-breaking athlete.",
+      "release_date": "2013-07-12",
+      "runtime": 186,
+      "budget": 300000000,
+      "revenue": 2100000000,
+      "vote_average": 8.2,
+      "vote_count": 15200,
+      "poster_path": "/bhaag_milkha_bhaag_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 36,
+          "name": "History"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 110,
+          "name": "ROMP"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201311,
+      "cast": [
+        {
+          "id": 1054,
+          "name": "Farhan Akhtar",
+          "original_name": "Farhan Akhtar",
+          "character": "Milkha Singh",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1055,
+          "name": "Sonam Kapoor",
+          "original_name": "Sonam Kapoor",
+          "character": "Biro",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1056,
+          "name": "Divya Dutta",
+          "original_name": "Divya Dutta",
+          "character": "Isri Kaur",
+          "order": 2,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2025,
+          "name": "Rakeysh Omprakash Mehra",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2019,
+          "name": "Shankar-Ehsaan-Loy",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Run Milkha Run"
     ]
   },
   {
@@ -4414,6 +5985,93 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 201410,
+      "title": "Race Gurram",
+      "original_title": "రేసు గుర్రం",
+      "original_language": "te",
+      "overview": "Two diametrically opposed brothers—one an uptight police officer, the other a reckless rulebreaker—team up to outsmart a ruthless gangster entering politics.",
+      "release_date": "2014-04-11",
+      "runtime": 163,
+      "budget": 400000000,
+      "revenue": 1020000000,
+      "vote_average": 7.9,
+      "vote_count": 11200,
+      "poster_path": "/race_gurram_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 119,
+          "name": "Sri Lakshmi Narasimha Productions"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201410,
+      "cast": [
+        {
+          "id": 1036,
+          "name": "Allu Arjun",
+          "original_name": "Allu Arjun",
+          "character": "Lucky",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1050,
+          "name": "Shruti Haasan",
+          "original_name": "Shruti Haasan",
+          "character": "Spandana",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1057,
+          "name": "Shaam",
+          "original_name": "Shaam",
+          "character": "Ram",
+          "order": 2,
+          "gender": 2
+        },
+        {
+          "id": 1005,
+          "name": "Brahmanandam",
+          "original_name": "Brahmanandam",
+          "character": "Kill Bill Pandey",
+          "order": 3,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2037,
+          "name": "Surender Reddy",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2038,
+          "name": "S. Thaman",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Race Horse",
+      "Lucky The Racer"
+    ]
+  },
+  {
+    "details": {
       "id": 201401,
       "title": "Manam",
       "original_title": "మనం",
@@ -4508,6 +6166,96 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Us"
+    ]
+  },
+  {
+    "details": {
+      "id": 201411,
+      "title": "Haider",
+      "original_title": "हैदर",
+      "original_language": "hi",
+      "overview": "A young Kashmiri student and poet returns home amidst insurgency to seek answers about his father’s disappearance, finding himself entangled in state and familial intrigue.",
+      "release_date": "2014-10-02",
+      "runtime": 160,
+      "budget": 240000000,
+      "revenue": 850000000,
+      "vote_average": 8.1,
+      "vote_count": 12800,
+      "poster_path": "/haider_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 80,
+          "name": "Crime"
+        },
+        {
+          "id": 53,
+          "name": "Thriller"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 120,
+          "name": "VB Pictures"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201411,
+      "cast": [
+        {
+          "id": 1058,
+          "name": "Shahid Kapoor",
+          "original_name": "Shahid Kapoor",
+          "character": "Haider Meer",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1059,
+          "name": "Tabu",
+          "original_name": "Tabu",
+          "character": "Ghazala Meer",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1060,
+          "name": "Kay Kay Menon",
+          "original_name": "Kay Kay Menon",
+          "character": "Khurram Meer",
+          "order": 2,
+          "gender": 2
+        },
+        {
+          "id": 1061,
+          "name": "Shraddha Kapoor",
+          "original_name": "Shraddha Kapoor",
+          "character": "Arshia Lone",
+          "order": 3,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2039,
+          "name": "Vishal Bhardwaj",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2039,
+          "name": "Vishal Bhardwaj",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Haider Hamlet"
     ]
   },
   {
@@ -4896,6 +6644,328 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 201510,
+      "title": "Srimanthudu",
+      "original_title": "శ్రీమంతుడు",
+      "original_language": "te",
+      "overview": "The idealistic heir of a business tycoon adopts his neglected ancestral village of Devarakota to develop its infrastructure and liberate its farmers from a cruel politician.",
+      "release_date": "2015-08-07",
+      "runtime": 163,
+      "budget": 400000000,
+      "revenue": 1440000000,
+      "vote_average": 7.9,
+      "vote_count": 13500,
+      "poster_path": "/srimanthudu_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 121,
+          "name": "Mythri Movie Makers"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201510,
+      "cast": [
+        {
+          "id": 1014,
+          "name": "Mahesh Babu",
+          "original_name": "Mahesh Babu",
+          "character": "Harsha Vardhan",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1050,
+          "name": "Shruti Haasan",
+          "original_name": "Shruti Haasan",
+          "character": "Charuseela",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1062,
+          "name": "Jagapathi Babu",
+          "original_name": "Jagapathi Babu",
+          "character": "Ravikanth",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2036,
+          "name": "Koratala Siva",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2004,
+          "name": "Devi Sri Prasad",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "The Billionaire"
+    ]
+  },
+  {
+    "details": {
+      "id": 201511,
+      "title": "Talvar",
+      "original_title": "तलवार",
+      "original_language": "hi",
+      "overview": "A seasoned CBI joint director investigates the puzzling double murder of a 14-year-old girl and the household servant, navigating conflicting testimonies and prejudice.",
+      "release_date": "2015-10-02",
+      "runtime": 132,
+      "budget": 150000000,
+      "revenue": 420000000,
+      "vote_average": 8.2,
+      "vote_count": 11000,
+      "poster_path": "/talvar_poster.jpg",
+      "genres": [
+        {
+          "id": 80,
+          "name": "Crime"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 9648,
+          "name": "Mystery"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 122,
+          "name": "Junglee Pictures"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201511,
+      "cast": [
+        {
+          "id": 1063,
+          "name": "Irrfan Khan",
+          "original_name": "Irrfan Khan",
+          "character": "Ashwin Kumar",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1064,
+          "name": "Konkona Sen Sharma",
+          "original_name": "Konkona Sen Sharma",
+          "character": "Nutan Tandon",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1065,
+          "name": "Neeraj Kabi",
+          "original_name": "Neeraj Kabi",
+          "character": "Ramesh Tandon",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2040,
+          "name": "Meghna Gulzar",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2039,
+          "name": "Vishal Bhardwaj",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Guilty",
+      "Noida Double Murder"
+    ]
+  },
+  {
+    "details": {
+      "id": 201611,
+      "title": "Neerja",
+      "original_title": "नीरजा",
+      "original_language": "hi",
+      "overview": "The heroic biographical account of purser Neerja Bhanot, who sacrificed her life protecting 359 passengers on hijacked Pan Am Flight 73 in Karachi in 1986.",
+      "release_date": "2016-02-19",
+      "runtime": 122,
+      "budget": 200000000,
+      "revenue": 1350000000,
+      "vote_average": 8,
+      "vote_count": 14200,
+      "poster_path": "/neerja_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 53,
+          "name": "Thriller"
+        },
+        {
+          "id": 36,
+          "name": "History"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 124,
+          "name": "Fox Star Studios"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201611,
+      "cast": [
+        {
+          "id": 1055,
+          "name": "Sonam Kapoor",
+          "original_name": "Sonam Kapoor",
+          "character": "Neerja Bhanot",
+          "order": 0,
+          "gender": 1
+        },
+        {
+          "id": 1069,
+          "name": "Shabana Azmi",
+          "original_name": "Shabana Azmi",
+          "character": "Rama Bhanot",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1070,
+          "name": "Jim Sarbh",
+          "original_name": "Jim Sarbh",
+          "character": "Khalil",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2043,
+          "name": "Ram Madhvani",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2044,
+          "name": "Vishal Khurana",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Pan Am 73"
+    ]
+  },
+  {
+    "details": {
+      "id": 201610,
+      "title": "Kshanam",
+      "original_title": "క్షణమ్",
+      "original_language": "te",
+      "overview": "An NRI investment banker returns to Hyderabad when his former lover begs him to find her missing young daughter, whose very existence is denied by everyone else.",
+      "release_date": "2016-02-26",
+      "runtime": 120,
+      "budget": 25000000,
+      "revenue": 140000000,
+      "vote_average": 8.2,
+      "vote_count": 7800,
+      "poster_path": "/kshanam_poster.jpg",
+      "genres": [
+        {
+          "id": 53,
+          "name": "Thriller"
+        },
+        {
+          "id": 9648,
+          "name": "Mystery"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 123,
+          "name": "PVP Cinema"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201610,
+      "cast": [
+        {
+          "id": 1066,
+          "name": "Adivi Sesh",
+          "original_name": "Adivi Sesh",
+          "character": "Rishi",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1067,
+          "name": "Adah Sharma",
+          "original_name": "Adah Sharma",
+          "character": "Swetha",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1068,
+          "name": "Anasuya Bharadwaj",
+          "original_name": "Anasuya Bharadwaj",
+          "character": "ACP Jaya Bharadwaj",
+          "order": 2,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2041,
+          "name": "Ravikanth Perepu",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2042,
+          "name": "Sricharan Pakala",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Moment",
+      "Kshanam Thriller"
+    ]
+  },
+  {
+    "details": {
       "id": 201601,
       "title": "Pelli Choopulu",
       "original_title": "పెళ్లి చూపులు",
@@ -5068,6 +7138,166 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Pink: No Means No"
+    ]
+  },
+  {
+    "details": {
+      "id": 201710,
+      "title": "Fidaa",
+      "original_title": "ఫిదా",
+      "original_language": "te",
+      "overview": "A medical student from Texas and a spunky village girl from Banswada in Telangana clash over their contrasting attachments to their homelands and cultural roots.",
+      "release_date": "2017-07-21",
+      "runtime": 145,
+      "budget": 130000000,
+      "revenue": 900000000,
+      "vote_average": 7.9,
+      "vote_count": 11500,
+      "poster_path": "/fidaa_poster.jpg",
+      "genres": [
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 125,
+          "name": "Sri Venkateswara Creations"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201710,
+      "cast": [
+        {
+          "id": 1071,
+          "name": "Varun Tej",
+          "original_name": "Varun Tej",
+          "character": "Varun",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1072,
+          "name": "Sai Pallavi",
+          "original_name": "Sai Pallavi",
+          "character": "Bhanumathi",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1073,
+          "name": "Sai Chand",
+          "original_name": "Sai Chand",
+          "character": "Bhanumathi’s father",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2026,
+          "name": "Sekhar Kammula",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2045,
+          "name": "Shakthikanth Karthick",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Fidaa Love Story"
+    ]
+  },
+  {
+    "details": {
+      "id": 201711,
+      "title": "Bareilly Ki Barfi",
+      "original_title": "बरेली की बर्फी",
+      "original_language": "hi",
+      "overview": "A free-spirited small-town girl falls in love with the progressive author of a local book, unaware that a cunning printing press owner ghostwrote it.",
+      "release_date": "2017-08-18",
+      "runtime": 116,
+      "budget": 180000000,
+      "revenue": 600000000,
+      "vote_average": 7.8,
+      "vote_count": 12000,
+      "poster_path": "/bkb_poster.jpg",
+      "genres": [
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 122,
+          "name": "Junglee Pictures"
+        },
+        {
+          "id": 126,
+          "name": "BR Studios"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201711,
+      "cast": [
+        {
+          "id": 1074,
+          "name": "Ayushmann Khurrana",
+          "original_name": "Ayushmann Khurrana",
+          "character": "Chirag Dubey",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1075,
+          "name": "Kriti Sanon",
+          "original_name": "Kriti Sanon",
+          "character": "Bitti Mishra",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1076,
+          "name": "Rajkummar Rao",
+          "original_name": "Rajkummar Rao",
+          "character": "Pritam Vidrohi",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2046,
+          "name": "Ashwiny Iyer Tiwari",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2047,
+          "name": "Tanishk Bagchi",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Barfi of Bareilly"
     ]
   },
   {
@@ -5424,6 +7654,89 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 201810,
+      "title": "Geetha Govindam",
+      "original_title": "గీత గోవిందం",
+      "original_language": "te",
+      "overview": "An innocent college lecturer is misunderstood as an insolent flirt by a stubborn, principled young woman whose brother is about to marry his sister.",
+      "release_date": "2018-08-15",
+      "runtime": 142,
+      "budget": 100000000,
+      "revenue": 1300000000,
+      "vote_average": 8,
+      "vote_count": 15400,
+      "poster_path": "/geetha_govindam_poster.jpg",
+      "genres": [
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 127,
+          "name": "GA2 Pictures"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201810,
+      "cast": [
+        {
+          "id": 1077,
+          "name": "Vijay Deverakonda",
+          "original_name": "Vijay Deverakonda",
+          "character": "Vijay Govind",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1078,
+          "name": "Rashmika Mandanna",
+          "original_name": "Rashmika Mandanna",
+          "character": "Geetha",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1079,
+          "name": "Subbaraju",
+          "original_name": "Subbaraju",
+          "character": "Phanindra",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2048,
+          "name": "Parasuram",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2049,
+          "name": "Gopi Sundar",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Inkem Inkem",
+      "Geetha Govindam RomCom"
+    ]
+  },
+  {
+    "details": {
       "id": 201802,
       "title": "Stree",
       "original_title": "स्त्री",
@@ -5514,6 +7827,92 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Stree 1"
+    ]
+  },
+  {
+    "details": {
+      "id": 201811,
+      "title": "Badhaai Ho",
+      "original_title": "बधाई हो",
+      "original_language": "hi",
+      "overview": "A 25-year-old corporate worker in Delhi must come to terms with social stigma and mockery when his middle-aged parents become pregnant.",
+      "release_date": "2018-10-18",
+      "runtime": 124,
+      "budget": 290000000,
+      "revenue": 2210000000,
+      "vote_average": 8,
+      "vote_count": 16800,
+      "poster_path": "/badhaai_ho_poster.jpg",
+      "genres": [
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 122,
+          "name": "Junglee Pictures"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201811,
+      "cast": [
+        {
+          "id": 1074,
+          "name": "Ayushmann Khurrana",
+          "original_name": "Ayushmann Khurrana",
+          "character": "Nakul Kaushik",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1080,
+          "name": "Neena Gupta",
+          "original_name": "Neena Gupta",
+          "character": "Priyamvada Kaushik",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1081,
+          "name": "Gajraj Rao",
+          "original_name": "Gajraj Rao",
+          "character": "Jeetendra Kaushik",
+          "order": 2,
+          "gender": 2
+        },
+        {
+          "id": 1082,
+          "name": "Sanya Malhotra",
+          "original_name": "Sanya Malhotra",
+          "character": "Renee Sharma",
+          "order": 3,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2050,
+          "name": "Amit Sharma",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2047,
+          "name": "Tanishk Bagchi",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Congratulations"
     ]
   },
   {
@@ -5780,6 +8179,183 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Jersey 2019"
+    ]
+  },
+  {
+    "details": {
+      "id": 201910,
+      "title": "Agent Sai Srinivasa Athreya",
+      "original_title": "ఏజెంట్ సాయి శ్రీనివాస ఆత్రేయ",
+      "original_language": "te",
+      "overview": "A quirky, brilliant private detective in Nellore investigates an unidentified dead body left on railway tracks, unraveling a sinister nationwide religious scam.",
+      "release_date": "2019-06-21",
+      "runtime": 148,
+      "budget": 40000000,
+      "revenue": 200000000,
+      "vote_average": 8.3,
+      "vote_count": 14200,
+      "poster_path": "/assa_poster.jpg",
+      "genres": [
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 9648,
+          "name": "Mystery"
+        },
+        {
+          "id": 53,
+          "name": "Thriller"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 128,
+          "name": "Swadharm Entertainment"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201910,
+      "cast": [
+        {
+          "id": 1083,
+          "name": "Naveen Polishetty",
+          "original_name": "Naveen Polishetty",
+          "character": "Agent Sai Srinivasa Athreya",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1084,
+          "name": "Shruti Sharma",
+          "original_name": "Shruti Sharma",
+          "character": "Sneha",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1085,
+          "name": "Shredha Rajagopalan",
+          "original_name": "Shredha Rajagopalan",
+          "character": "Vasudha",
+          "order": 2,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2051,
+          "name": "Swaroop RSJ",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2052,
+          "name": "Mark K Robin",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "ASSA",
+      "Agent Athreya"
+    ]
+  },
+  {
+    "details": {
+      "id": 201911,
+      "title": "Article 15",
+      "original_title": "आर्टिकल 15",
+      "original_language": "hi",
+      "overview": "A righteous Indian Police Service officer in rural Uttar Pradesh probes the gruesome rape and murder of two Dalit teenagers, challenging caste violence.",
+      "release_date": "2019-06-28",
+      "runtime": 130,
+      "budget": 280000000,
+      "revenue": 930000000,
+      "vote_average": 8.1,
+      "vote_count": 13800,
+      "poster_path": "/article_15_poster.jpg",
+      "genres": [
+        {
+          "id": 80,
+          "name": "Crime"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 9648,
+          "name": "Mystery"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 129,
+          "name": "Benaras Media Works"
+        },
+        {
+          "id": 130,
+          "name": "Zee Studios"
+        }
+      ]
+    },
+    "credits": {
+      "id": 201911,
+      "cast": [
+        {
+          "id": 1074,
+          "name": "Ayushmann Khurrana",
+          "original_name": "Ayushmann Khurrana",
+          "character": "Ayan Ranjan IPS",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1086,
+          "name": "Nassar",
+          "original_name": "Nassar",
+          "character": "Panikar",
+          "order": 1,
+          "gender": 2
+        },
+        {
+          "id": 1087,
+          "name": "Manoj Pahwa",
+          "original_name": "Manoj Pahwa",
+          "character": "Circle Officer Brahmadutt Singh",
+          "order": 2,
+          "gender": 2
+        },
+        {
+          "id": 1088,
+          "name": "Kumud Mishra",
+          "original_name": "Kumud Mishra",
+          "character": "Sub-Inspector Jatav",
+          "order": 3,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2053,
+          "name": "Anubhav Sinha",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2054,
+          "name": "Anurag Saikia",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Article 15 Constitution"
     ]
   },
   {
@@ -6144,6 +8720,89 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 202110,
+      "title": "Sardar Udham",
+      "original_title": "सरदार उधम",
+      "original_language": "hi",
+      "overview": "The unrelenting journey of revolutionary freedom fighter Udham Singh, who spent two decades hunting Michael O’Dwyer to avenge the Jallianwala Bagh massacre.",
+      "release_date": "2021-10-16",
+      "runtime": 164,
+      "budget": 450000000,
+      "revenue": 650000000,
+      "vote_average": 8.4,
+      "vote_count": 17200,
+      "poster_path": "/sardar_udham_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 36,
+          "name": "History"
+        },
+        {
+          "id": 28,
+          "name": "Action"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 131,
+          "name": "Rising Sun Films"
+        }
+      ]
+    },
+    "credits": {
+      "id": 202110,
+      "cast": [
+        {
+          "id": 1089,
+          "name": "Vicky Kaushal",
+          "original_name": "Vicky Kaushal",
+          "character": "Udham Singh / Ram Mohammad Singh Azad",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1090,
+          "name": "Shaun Scott",
+          "original_name": "Shaun Scott",
+          "character": "Michael O’Dwyer",
+          "order": 1,
+          "gender": 2
+        },
+        {
+          "id": 1091,
+          "name": "Amol Parashar",
+          "original_name": "Amol Parashar",
+          "character": "Bhagat Singh",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2055,
+          "name": "Shoojit Sircar",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2024,
+          "name": "Shantanu Moitra",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Udham Singh",
+      "Sardar Udham Singh"
+    ]
+  },
+  {
+    "details": {
       "id": 202103,
       "title": "Pushpa: The Rise",
       "original_title": "పుష్ప: ది రైజ్",
@@ -6321,6 +8980,88 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 202210,
+      "title": "Karthikeya 2",
+      "original_title": "కార్తికేయ 2",
+      "original_language": "te",
+      "overview": "A rational young doctor travels to Dwarka and the Himalayas on a perilous mythological quest to recover the ancient anklet of Lord Krishna.",
+      "release_date": "2022-08-13",
+      "runtime": 150,
+      "budget": 150000000,
+      "revenue": 1210000000,
+      "vote_average": 8,
+      "vote_count": 14800,
+      "poster_path": "/karthikeya_2_poster.jpg",
+      "genres": [
+        {
+          "id": 12,
+          "name": "Adventure"
+        },
+        {
+          "id": 9648,
+          "name": "Mystery"
+        },
+        {
+          "id": 14,
+          "name": "Fantasy"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 132,
+          "name": "People Media Factory"
+        }
+      ]
+    },
+    "credits": {
+      "id": 202210,
+      "cast": [
+        {
+          "id": 1039,
+          "name": "Nikhil Siddharth",
+          "original_name": "Nikhil Siddharth",
+          "character": "Dr. Karthikeya Kumaraswamy",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1092,
+          "name": "Anupama Parameswaran",
+          "original_name": "Anupama Parameswaran",
+          "character": "Mugdha",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1043,
+          "name": "Anupam Kher",
+          "original_name": "Anupam Kher",
+          "character": "Dr. Dhanvantri Vedpathak",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2056,
+          "name": "Chandoo Mondeti",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2057,
+          "name": "Kaala Bhairava",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Karthikeya 2 Krishna Quest"
+    ]
+  },
+  {
+    "details": {
       "id": 202202,
       "title": "Brahmāstra: Part One – Shiva",
       "original_title": "ब्रह्मास्त्र: पहला भाग – शिवा",
@@ -6419,6 +9160,96 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
   },
   {
     "details": {
+      "id": 202211,
+      "title": "Drishyam 2",
+      "original_title": "दृश्यम 2",
+      "original_language": "hi",
+      "overview": "Seven years after the mysterious disappearance of an IG’s son, Vijay Salgaonkar and his family are targeted by a relentless new police chief.",
+      "release_date": "2022-11-18",
+      "runtime": 140,
+      "budget": 500000000,
+      "revenue": 3450000000,
+      "vote_average": 8.2,
+      "vote_count": 18900,
+      "poster_path": "/drishyam_2_poster.jpg",
+      "genres": [
+        {
+          "id": 80,
+          "name": "Crime"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 53,
+          "name": "Thriller"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 133,
+          "name": "Panorama Studios"
+        }
+      ]
+    },
+    "credits": {
+      "id": 202211,
+      "cast": [
+        {
+          "id": 1093,
+          "name": "Ajay Devgn",
+          "original_name": "Ajay Devgn",
+          "character": "Vijay Salgaonkar",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1059,
+          "name": "Tabu",
+          "original_name": "Tabu",
+          "character": "Meera Deshmukh",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1094,
+          "name": "Akshaye Khanna",
+          "original_name": "Akshaye Khanna",
+          "character": "IG Tarun Ahlawat",
+          "order": 2,
+          "gender": 2
+        },
+        {
+          "id": 1095,
+          "name": "Shriya Saran",
+          "original_name": "Shriya Saran",
+          "character": "Nandini Salgaonkar",
+          "order": 3,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2058,
+          "name": "Abhishek Pathak",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2004,
+          "name": "Devi Sri Prasad",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Drishyam 2 Hindi"
+    ]
+  },
+  {
+    "details": {
       "id": 202302,
       "title": "12th Fail",
       "original_title": "12वीं फेल",
@@ -6501,6 +9332,178 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "Twelfth Fail"
+    ]
+  },
+  {
+    "details": {
+      "id": 202311,
+      "title": "Animal",
+      "original_title": "एनिमल",
+      "original_language": "hi",
+      "overview": "An obsessive son embarks on a violent, generational vendetta across continents after an assassination attempt on his distant billionaire father.",
+      "release_date": "2023-12-01",
+      "runtime": 201,
+      "budget": 1000000000,
+      "revenue": 9170000000,
+      "vote_average": 7.6,
+      "vote_count": 22000,
+      "poster_path": "/animal_poster.jpg",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 80,
+          "name": "Crime"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 135,
+          "name": "T-Series Films"
+        },
+        {
+          "id": 136,
+          "name": "Bhadrakali Pictures"
+        }
+      ]
+    },
+    "credits": {
+      "id": 202311,
+      "cast": [
+        {
+          "id": 1098,
+          "name": "Ranbir Kapoor",
+          "original_name": "Ranbir Kapoor",
+          "character": "Ranvijay Singh / Aziz Haque",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1099,
+          "name": "Anil Kapoor",
+          "original_name": "Anil Kapoor",
+          "character": "Balbir Singh",
+          "order": 1,
+          "gender": 2
+        },
+        {
+          "id": 1100,
+          "name": "Bobby Deol",
+          "original_name": "Bobby Deol",
+          "character": "Abrar Haque",
+          "order": 2,
+          "gender": 2
+        },
+        {
+          "id": 1078,
+          "name": "Rashmika Mandanna",
+          "original_name": "Rashmika Mandanna",
+          "character": "Geetanjali Singh",
+          "order": 3,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2061,
+          "name": "Sandeep Reddy Vanga",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2062,
+          "name": "Pritam",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Animal Ranbir"
+    ]
+  },
+  {
+    "details": {
+      "id": 202310,
+      "title": "Hi Nanna",
+      "original_title": "హాయ్ నాన్న",
+      "original_language": "te",
+      "overview": "A celebrity fashion photographer in Mumbai raising his daughter with cystic fibrosis encounters a mysterious woman who bonds deeply with the child.",
+      "release_date": "2023-12-07",
+      "runtime": 155,
+      "budget": 450000000,
+      "revenue": 750000000,
+      "vote_average": 8.3,
+      "vote_count": 16200,
+      "poster_path": "/hi_nanna_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 134,
+          "name": "Vyra Entertainments"
+        }
+      ]
+    },
+    "credits": {
+      "id": 202310,
+      "cast": [
+        {
+          "id": 1065,
+          "name": "Nani",
+          "original_name": "Nani",
+          "character": "Viraj",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1096,
+          "name": "Mrunal Thakur",
+          "original_name": "Mrunal Thakur",
+          "character": "Yashna / Varsha",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1097,
+          "name": "Baby Kiara Khanna",
+          "original_name": "Baby Kiara Khanna",
+          "character": "Mahi",
+          "order": 2,
+          "gender": 1
+        }
+      ],
+      "crew": [
+        {
+          "id": 2059,
+          "name": "Shouryuv",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2060,
+          "name": "Hesham Abdul Wahab",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Hi Papa"
     ]
   },
   {
@@ -6681,6 +9684,167 @@ export const HISTORICAL_CATALOG: HistoricalMovieRecord[] = [
     },
     "alternativeTitles": [
       "HanuMan"
+    ]
+  },
+  {
+    "details": {
+      "id": 202410,
+      "title": "Tillu Square",
+      "original_title": "టిల్లు స్క్వేర్",
+      "original_language": "te",
+      "overview": "DJ Tillu gets entangled in another chaotic international espionage mission after falling for a charming undercover intelligence agent.",
+      "release_date": "2024-03-29",
+      "runtime": 125,
+      "budget": 200000000,
+      "revenue": 1350000000,
+      "vote_average": 7.8,
+      "vote_count": 14500,
+      "poster_path": "/tillu_square_poster.jpg",
+      "genres": [
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 80,
+          "name": "Crime"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 137,
+          "name": "Sithara Entertainments"
+        }
+      ]
+    },
+    "credits": {
+      "id": 202410,
+      "cast": [
+        {
+          "id": 1101,
+          "name": "Siddhu Jonnalagadda",
+          "original_name": "Siddhu Jonnalagadda",
+          "character": "Bala Gangadhar Tilak (DJ Tillu)",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1092,
+          "name": "Anupama Parameswaran",
+          "original_name": "Anupama Parameswaran",
+          "character": "Lilly Joseph",
+          "order": 1,
+          "gender": 1
+        },
+        {
+          "id": 1102,
+          "name": "Muralidhar Goud",
+          "original_name": "Muralidhar Goud",
+          "character": "Tillu’s father",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2063,
+          "name": "Mallik Ram",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2064,
+          "name": "Ram Miriyala",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "DJ Tillu 2",
+      "Tillu 2"
+    ]
+  },
+  {
+    "details": {
+      "id": 202411,
+      "title": "Chandu Champion",
+      "original_title": "चंदू चैंपियन",
+      "original_language": "hi",
+      "overview": "The extraordinary biographical journey of Murlikant Petkar, an Indian soldier who survived 9 bullet wounds in the 1965 war to win India’s first Paralympic gold.",
+      "release_date": "2024-06-14",
+      "runtime": 143,
+      "budget": 700000000,
+      "revenue": 960000000,
+      "vote_average": 8.2,
+      "vote_count": 12500,
+      "poster_path": "/chandu_champion_poster.jpg",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 36,
+          "name": "History"
+        }
+      ],
+      "production_companies": [
+        {
+          "id": 138,
+          "name": "Nadiadwala Grandson Entertainment"
+        }
+      ]
+    },
+    "credits": {
+      "id": 202411,
+      "cast": [
+        {
+          "id": 1103,
+          "name": "Kartik Aaryan",
+          "original_name": "Kartik Aaryan",
+          "character": "Murlikant Petkar",
+          "order": 0,
+          "gender": 2
+        },
+        {
+          "id": 1104,
+          "name": "Vijay Raaz",
+          "original_name": "Vijay Raaz",
+          "character": "Tiger Ali",
+          "order": 1,
+          "gender": 2
+        },
+        {
+          "id": 1105,
+          "name": "Bhuvan Arora",
+          "original_name": "Bhuvan Arora",
+          "character": "Garnail Singh",
+          "order": 2,
+          "gender": 2
+        }
+      ],
+      "crew": [
+        {
+          "id": 2065,
+          "name": "Kabir Khan",
+          "job": "Director",
+          "department": "Directing"
+        },
+        {
+          "id": 2062,
+          "name": "Pritam",
+          "job": "Original Music Composer",
+          "department": "Sound"
+        }
+      ]
+    },
+    "alternativeTitles": [
+      "Murlikant Petkar Gold"
     ]
   },
   {

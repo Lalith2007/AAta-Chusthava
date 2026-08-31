@@ -106,12 +106,18 @@ export class TmdbAdapter implements MovieDataSource {
   ): Promise<{ results: DiscoveredMovieSummary[]; totalPages: number; totalResults: number }> {
     if (!this.apiKey && !this.token) {
       // Return matching movies from canonical historical catalog
+      const pageSize = 20;
       const matches = HISTORICAL_CATALOG.filter((m) => {
         const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
         return m.details.original_language === language && movieYear === year;
       });
 
-      const results: DiscoveredMovieSummary[] = matches.map((m) => ({
+      const totalResults = matches.length;
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+      const startIdx = (page - 1) * pageSize;
+      const pageMatches = matches.slice(startIdx, startIdx + pageSize);
+
+      const results: DiscoveredMovieSummary[] = pageMatches.map((m) => ({
         source: 'TMDB',
         sourceMovieId: String(m.details.id),
         title: m.details.title,
@@ -125,8 +131,8 @@ export class TmdbAdapter implements MovieDataSource {
 
       return {
         results,
-        totalPages: 1,
-        totalResults: results.length,
+        totalPages,
+        totalResults,
       };
     }
 
@@ -163,12 +169,18 @@ export class TmdbAdapter implements MovieDataSource {
       };
     } catch {
       // Graceful fallback to historical catalog
+      const pageSize = 20;
       const matches = HISTORICAL_CATALOG.filter((m) => {
         const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
         return m.details.original_language === language && movieYear === year;
       });
 
-      const results: DiscoveredMovieSummary[] = matches.map((m) => ({
+      const totalResults = matches.length;
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+      const startIdx = (page - 1) * pageSize;
+      const pageMatches = matches.slice(startIdx, startIdx + pageSize);
+
+      const results: DiscoveredMovieSummary[] = pageMatches.map((m) => ({
         source: 'TMDB',
         sourceMovieId: String(m.details.id),
         title: m.details.title,
@@ -182,8 +194,8 @@ export class TmdbAdapter implements MovieDataSource {
 
       return {
         results,
-        totalPages: 1,
-        totalResults: results.length,
+        totalPages,
+        totalResults,
       };
     }
   }
