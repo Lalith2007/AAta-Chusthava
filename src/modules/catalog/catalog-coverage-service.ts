@@ -293,6 +293,25 @@ export class CatalogCoverageService {
       wikidataAccepted + wikidataPriorProcessed + wikidataDuplicates + wikidataReview + wikidataRejected;
     const wikidataCandidateOutcomeReconciled = wikidataCandidateOutcomeSum === wikidataCandidates.length;
 
+    const wikipediaCandidates = candidates.filter((c) => c.source.toUpperCase() === 'WIKIPEDIA');
+    const wikipediaAccepted = wikipediaCandidates.filter(
+      (c) => c.status === 'VALIDATED' || (c.resolutionReason && c.resolutionReason.includes('ACCEPTED'))
+    ).length;
+    const wikipediaPriorProcessed = wikipediaCandidates.filter((c) => c.status === 'NORMALIZED').length;
+    const wikipediaEnriched = wikipediaCandidates.filter(
+      (c) => c.rawSourceRecordId !== null || ['ENRICHED', 'NORMALIZED', 'VALIDATED', 'DUPLICATE'].includes(c.status)
+    ).length;
+    const wikipediaReview = wikipediaCandidates.filter(
+      (c) => ['PROCESSING', 'DISCOVERED'].includes(c.status) || c.resolutionReason === 'ACCEPTED_NEEDS_REVIEW'
+    ).length;
+    const wikipediaRejected = wikipediaCandidates.filter((c) => ['REJECTED', 'FAILED'].includes(c.status)).length;
+    const wikipediaDuplicates = wikipediaCandidates.filter(
+      (c) => c.status === 'DUPLICATE' || (c.resolutionReason && c.resolutionReason.includes('DUPLICATE'))
+    ).length;
+    const wikipediaCandidateOutcomeSum =
+      wikipediaAccepted + wikipediaPriorProcessed + wikipediaDuplicates + wikipediaReview + wikipediaRejected;
+    const wikipediaCandidateOutcomeReconciled = wikipediaCandidateOutcomeSum === wikipediaCandidates.length;
+
     const secondaryNewMovies = movies.filter((m) => m.wikidataId !== null && m.tmdbId === null).length;
     const tmdbOnlyCanonical = movies.filter((m) => m.tmdbId !== null && m.wikidataId === null).length;
     const bothSourcesCanonical = movies.filter((m) => m.tmdbId !== null && m.wikidataId !== null).length;
@@ -340,6 +359,25 @@ export class CatalogCoverageService {
           candidateOutcomeReconciled: wikidataCandidateOutcomeReconciled,
           newUniqueMoviesContributed: secondaryNewMovies,
           canonicalWithSourceId: wikidataCanonicalCount,
+        };
+      }
+      if (s.code === 'WIKIPEDIA') {
+        return {
+          name: s.name,
+          code: s.code,
+          status: 'ACTIVE',
+          isImplemented: true,
+          candidatesDiscovered: wikipediaCandidates.length,
+          successfullyEnriched: wikipediaEnriched || rawRecords.filter((r) => r.source === 'WIKIPEDIA').length,
+          accepted: wikipediaAccepted,
+          priorProcessed: wikipediaPriorProcessed,
+          review: wikipediaReview,
+          rejected: wikipediaRejected,
+          duplicates: wikipediaDuplicates,
+          candidateOutcomeSum: wikipediaCandidateOutcomeSum,
+          candidateOutcomeReconciled: wikipediaCandidateOutcomeReconciled,
+          newUniqueMoviesContributed: wikipediaAccepted,
+          canonicalWithSourceId: 0,
         };
       }
       return {
