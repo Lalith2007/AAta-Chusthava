@@ -313,19 +313,27 @@ export class CatalogCoverageService {
       };
     });
 
+    const wikidataValidatedCandidates = wikidataCandidates.filter(
+      (c) => c.status === 'VALIDATED' || c.resolutionReason === 'ACCEPTED_NEW_CANONICAL'
+    ).length;
+
     const sourceComparison: SourceComparisonReport = {
       tmdbCandidates: tmdbCandidates.length,
       secondaryCandidates: wikidataCandidates.length,
-      crossSourceOverlap: bothSourcesCanonical + wikidataDuplicates,
+      crossSourceOverlap: wikidataDuplicates,
       tmdbOnlyCanonical,
       secondaryOnlyCanonical: secondaryNewMovies,
       bothSourcesCanonical,
-      newCanonicalContributedBySecondary: secondaryNewMovies,
+      newCanonicalContributedBySecondary: wikidataValidatedCandidates,
     };
 
-    // 5. Duplicate Check
+    // 5. Duplicate & Invariant Checks
     const uniqueSlugs = new Set(movies.map((m) => m.slug));
     const zeroDuplicateCanonicalMovies = uniqueSlugs.size === totalMovies;
+
+    const sumYearTargets = yearBreakdown.reduce((acc, y) => acc + y.playableTargets, 0);
+    const yearTargetsReconciled = sumYearTargets === playableAsTarget;
+    const playableBothConsistent = playableBoth <= playableAsGuess && playableBoth <= playableAsTarget;
 
     // 6. Audit Metadata
     const oldestMovie = movies.length > 0 ? { title: movies[0].primaryTitle, year: movies[0].releaseYear } : null;
@@ -371,7 +379,7 @@ export class CatalogCoverageService {
       },
       invariants: {
         languageReconciliationPass: isLanguageReconciled,
-        yearReconciliationPass: globalYearsReconciled,
+        yearReconciliationPass: globalYearsReconciled && yearTargetsReconciled && playableBothConsistent,
         zeroDuplicateCanonicalMovies,
       },
     };

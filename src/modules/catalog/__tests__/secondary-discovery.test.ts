@@ -182,4 +182,29 @@ describe('Secondary Movie Discovery Source (Wikidata / Open Knowledge Graph)', (
     expect(report.invariants.zeroDuplicateCanonicalMovies).toBe(true);
     expect(report.coverageStatus).toBe('PARTIAL');
   });
+
+  it('7. Guarantees 100% strict mathematical reconciliation across all language and year totals', async () => {
+    const report = await catalogCoverageService.getCoverageReport();
+
+    // 1. Language sum equals total movies exactly
+    const langSum =
+      report.languageBreakdown.teluguOnly +
+      report.languageBreakdown.hindiOnly +
+      report.languageBreakdown.multilingual +
+      report.languageBreakdown.other +
+      report.languageBreakdown.unknown;
+    expect(langSum).toBe(report.totals.totalMovies);
+
+    // 2. Year sum equals total movies exactly
+    const yearSum = report.yearBreakdown.reduce((acc, y) => acc + y.total, 0);
+    expect(yearSum).toBe(report.totals.totalMovies);
+
+    // 3. Year target playable sum equals total target playable exactly
+    const yearTargetSum = report.yearBreakdown.reduce((acc, y) => acc + y.playableTargets, 0);
+    expect(yearTargetSum).toBe(report.totals.playableAsTarget);
+
+    // 4. Playable both constraint
+    expect(report.totals.playableBoth).toBeLessThanOrEqual(report.totals.playableAsGuess);
+    expect(report.totals.playableBoth).toBeLessThanOrEqual(report.totals.playableAsTarget);
+  });
 });
