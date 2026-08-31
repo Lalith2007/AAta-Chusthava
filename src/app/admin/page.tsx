@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   ShieldAlert,
   Activity,
@@ -163,13 +164,22 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <button
-          onClick={loadData}
-          className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>Refresh Data</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <Link
+            href="/admin/catalog"
+            className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-sm"
+          >
+            <Database className="w-3.5 h-3.5 text-amber-400" />
+            <span>Catalog Coverage Dashboard</span>
+          </Link>
+          <button
+            onClick={loadData}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Refresh Data</span>
+          </button>
+        </div>
       </div>
 
       {actionMessage && (

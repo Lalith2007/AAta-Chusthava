@@ -95,6 +95,7 @@ enum CandidateStatus {
   VALIDATED
   REJECTED
   FAILED
+  DUPLICATE
 }
 
 enum GameMode {
@@ -349,11 +350,15 @@ model IngestionCandidate {
   discoveryReason    String?
   status             CandidateStatus @default(DISCOVERED)
   lastAttemptAt      DateTime?
+  processedAt        DateTime?
   error              String?
   rawSourceRecordId  String?
+  resolutionReason   String?
+  duplicateOfMovieId String?
 
   @@unique([source, sourceMovieId])
   @@index([status])
+  @@index([source])
 }
 
 model GameRuleset {

@@ -137,7 +137,12 @@ export class IngestionService {
       if (!releaseYear || releaseYear < 2002) {
         await prisma.ingestionCandidate.update({
           where: { id: candidateId },
-          data: { status: 'REJECTED', error: 'Release year prior to 2002 or invalid' },
+          data: {
+            status: 'REJECTED',
+            error: 'Release year prior to 2002 or invalid',
+            processedAt: new Date(),
+            resolutionReason: 'REJECTED_YEAR_BEFORE_2002',
+          },
         });
         return {
           candidateId,
@@ -488,8 +493,10 @@ export class IngestionService {
       await prisma.ingestionCandidate.update({
         where: { id: candidateId },
         data: {
-          status: 'NORMALIZED',
+          status: 'VALIDATED',
           rawSourceRecordId: rawRecord.id,
+          processedAt: new Date(),
+          resolutionReason: isTargetPlayable ? 'ACCEPTED_APPROVED' : 'ACCEPTED_NEEDS_REVIEW',
         },
       });
 
@@ -503,10 +510,43 @@ export class IngestionService {
       const errorMsg = err instanceof Error ? err.message : String(err);
       await prisma.ingestionCandidate.update({
         where: { id: candidateId },
-        data: { status: 'FAILED', error: errorMsg },
+        data: {
+          status: 'FAILED',
+          error: errorMsg,
+          processedAt: new Date(),
+          resolutionReason: 'PROCESSING_ERROR',
+        },
       });
       return { candidateId, status: 'FAILED', title: '', reason: errorMsg };
     }
+  }
+
+  async discoverAndIngestMissingCandidate(
+    source: string,
+    sourceMovieId: string,
+    reason = 'Manual / Targeted Missing Candidate Discovery'
+  ): Promise<IngestionResult> {
+    let candidate = await prisma.ingestionCandidate.findUnique({
+      where: {
+        source_sourceMovieId: {
+          source,
+          sourceMovieId,
+        },
+      },
+    });
+
+    if (!candidate) {
+      candidate = await prisma.ingestionCandidate.create({
+        data: {
+          source,
+          sourceMovieId,
+          discoveryReason: reason,
+          status: 'DISCOVERED',
+        },
+      });
+    }
+
+    return this.processCandidate(candidate.id);
   }
 
   async runFullHistoricalIngestion(
