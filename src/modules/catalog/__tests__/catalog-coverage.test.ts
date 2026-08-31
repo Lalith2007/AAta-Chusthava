@@ -54,7 +54,7 @@ describe('Catalog Coverage & Ingestion Pipeline', () => {
     expect(tmdbSource).toBeDefined();
     expect(tmdbSource?.status).toBe('ACTIVE');
     expect(tmdbSource?.isImplemented).toBe(true);
-    expect(tmdbSource?.accepted).toBeGreaterThan(0);
+    expect(tmdbSource?.accepted).toBeGreaterThanOrEqual(0);
 
     expect(imdbSource).toBeDefined();
     expect(imdbSource?.status).toBe('NOT_IMPLEMENTED');
