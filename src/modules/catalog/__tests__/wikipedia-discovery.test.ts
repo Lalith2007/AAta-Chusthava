@@ -10,13 +10,13 @@ describe('Wikipedia Filmography Discovery Source (CC BY-SA 4.0)', () => {
     await prisma.ingestionCandidate.deleteMany({
       where: {
         source: 'WIKIPEDIA',
-        sourceMovieId: { in: ['WIKI_TE_2023_waltair-veerayya', 'WIKI_TE_1995_old-film'] },
+        sourceMovieId: { in: ['WIKI_TE_2002_manmadhudu', 'WIKI_TE_2023_waltair-veerayya', 'WIKI_TE_1995_old-film'] },
       },
     });
     await prisma.rawSourceRecord.deleteMany({
       where: {
         source: 'WIKIPEDIA',
-        sourceRecordId: { in: ['WIKI_TE_2023_waltair-veerayya', 'WIKI_TE_1995_old-film'] },
+        sourceRecordId: { in: ['WIKI_TE_2002_manmadhudu', 'WIKI_TE_2023_waltair-veerayya', 'WIKI_TE_1995_old-film'] },
       },
     });
   });
@@ -40,38 +40,38 @@ describe('Wikipedia Filmography Discovery Source (CC BY-SA 4.0)', () => {
   it('2. Discovers Telugu and Hindi candidate summaries for historical years', async () => {
     const teResult = await wikipediaDiscoveryAdapter.discover({
       language: 'te',
-      year: 2023,
+      year: 2002,
       page: 1,
-      limit: 10,
+      limit: 50,
     });
 
-    expect(teResult.results.length).toBeGreaterThan(0);
+    expect(teResult.results.length).toBeGreaterThanOrEqual(10);
     expect(teResult.results[0].title).toBeDefined();
     expect(teResult.results[0].originalLanguage).toBe('te');
 
     const hiResult = await wikipediaDiscoveryAdapter.discover({
       language: 'hi',
-      year: 2023,
+      year: 2002,
       page: 1,
-      limit: 10,
+      limit: 50,
     });
 
-    expect(hiResult.results.length).toBeGreaterThan(0);
+    expect(hiResult.results.length).toBeGreaterThanOrEqual(10);
     expect(hiResult.results[0].title).toBeDefined();
     expect(hiResult.results[0].originalLanguage).toBe('hi');
   });
 
   it('3. Extracts candidate identity with language, year, and source', async () => {
-    const identity = await wikipediaDiscoveryAdapter.getCandidateIdentity('WIKI_TE_2023_waltair-veerayya');
+    const identity = await wikipediaDiscoveryAdapter.getCandidateIdentity('WIKI_TE_2002_manmadhudu');
 
     expect(identity.source).toBe('WIKIPEDIA');
-    expect(identity.title).toBe('Waltair Veerayya');
-    expect(identity.releaseYear).toBe(2023);
+    expect(identity.title).toBe('Manmadhudu');
+    expect(identity.releaseYear).toBe(2002);
     expect(identity.primaryLanguage).toBe('TELUGU');
   });
 
   it('4. Retains source provenance and CC BY-SA 4.0 attribution in metadata', async () => {
-    const metadata = await wikipediaDiscoveryAdapter.getMetadata('WIKI_TE_2023_waltair-veerayya');
+    const metadata = await wikipediaDiscoveryAdapter.getMetadata('WIKI_TE_2002_manmadhudu');
 
     expect(metadata.overview).toContain('CC BY-SA 4.0');
     expect(metadata.genres.length).toBeGreaterThan(0);
@@ -175,5 +175,11 @@ describe('Wikipedia Filmography Discovery Source (CC BY-SA 4.0)', () => {
     expect(wikiCoverage?.candidateOutcomeReconciled).toBe(true);
     expect(wikiCoverage?.candidateOutcomeSum).toBe(wikiCoverage?.candidatesDiscovered);
     expect(report.coverageStatus).toBe('PARTIAL');
+  });
+
+  it('8. Clean wikilink stripping handles complex references, templates, and formatted text', () => {
+    const raw = `| ''[[Indra (2002 film)|''Indra'']]'' <ref>{{Cite web |title=Indra |url=https://example.com}}</ref>`;
+    const cleaned = wikipediaDiscoveryAdapter.cleanWikilink(raw);
+    expect(cleaned).toBe('| Indra');
   });
 });

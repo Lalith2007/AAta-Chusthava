@@ -10,7 +10,7 @@ import {
 } from './discovery-source';
 
 export interface WikipediaFilmRecord {
-  id: string; // e.g. WIKI_TE_2023_waltair-veerayya
+  id: string; // e.g. WIKI_TE_2002_seema-simham
   title: string;
   originalTitle: string;
   language: 'te' | 'hi';
@@ -87,11 +87,12 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
     if (!rec) {
       const yearMatch = sourceMovieId.match(/_(\d{4})_/);
       const parsedYear = yearMatch ? parseInt(yearMatch[1], 10) : 2024;
+      const rawTitle = sourceMovieId.replace(/^WIKI_[A-Z]+_\d+_/i, '').replace(/-/g, ' ');
       return {
         source: this.sourceName,
         sourceMovieId,
-        title: sourceMovieId.replace(/^WIKI_[A-Z]+_\d+_/i, '').replace(/-/g, ' '),
-        originalTitle: sourceMovieId.replace(/^WIKI_[A-Z]+_\d+_/i, '').replace(/-/g, ' '),
+        title: rawTitle,
+        originalTitle: rawTitle,
         releaseYear: parsedYear,
         primaryLanguage: sourceMovieId.includes('_TE_') ? 'TELUGU' : 'HINDI',
       };
@@ -147,44 +148,32 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
   }
 
   /**
-   * Fetches annual filmography wikitext from MediaWiki API and parses table rows.
+   * Cleans MediaWiki wikitext artifacts, templates, links, references, and HTML formatting.
    */
-  private async fetchYearFilmography(lang: 'te' | 'hi', year: number): Promise<WikipediaFilmRecord[]> {
-    const pageTitle =
-      lang === 'te' ? `List_of_Telugu_films_of_${year}` : `List_of_Hindi_films_of_${year}`;
-    const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${pageTitle}&prop=wikitext&format=json`;
-
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'AAtaChusthava/1.0 (https://github.com/Lalith2007/AAta-Chusthava; contact: admin@aatachusthava.com)',
-        },
-        signal: AbortSignal.timeout(6000),
-      });
-
-      if (!res.ok) return [];
-
-      const data = await res.json();
-      const wikitext = data?.parse?.wikitext?.['*'];
-      if (!wikitext) return [];
-
-      const extracted = this.parseWikitextFilmography(wikitext, lang, year, pageTitle);
-      for (const rec of extracted) {
-        this.cache.set(rec.id, rec);
-      }
-      return extracted;
-    } catch (e) {
-      // Return cached/seeded entries on network error
-      return Array.from(this.cache.values()).filter(
-        (m) => m.language === lang && m.releaseYear === year
-      );
-    }
+  public cleanWikilink(text: string): string {
+    if (!text) return '';
+    let cleaned = text;
+    // Remove <ref>...</ref> and <ref .../>
+    cleaned = cleaned.replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, '');
+    cleaned = cleaned.replace(/<ref\b[^>]*\/>/gi, '');
+    // Remove HTML tags like <small>, <br>, <b>, <i>
+    cleaned = cleaned.replace(/<[^>]+>/g, '');
+    // Remove templates like {{efn|...}}, {{INR|...}}, {{cite...}}
+    cleaned = cleaned.replace(/\{\{[^}]+\}\}/g, '');
+    // Convert [[Target|Label]] to Label, and [[Title]] to Title
+    cleaned = cleaned.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2');
+    cleaned = cleaned.replace(/\[\[([^\]]+)\]\]/g, '$1');
+    // Remove bold/italics
+    cleaned = cleaned.replace(/[']{2,5}/g, '');
+    // Clean HTML entities and non-breaking spaces
+    cleaned = cleaned.replace(/&nbsp;/gi, ' ');
+    return cleaned.trim();
   }
 
   /**
    * Parses MediaWiki wikitext tables for film titles, release dates, directors, and cast.
    */
-  private parseWikitextFilmography(
+  public parseWikitextFilmography(
     wikitext: string,
     lang: 'te' | 'hi',
     year: number,
@@ -194,59 +183,175 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
     const sourceArticleUrl = `https://en.wikipedia.org/wiki/${pageTitle}`;
     const attribution = `Derived from Wikipedia article "${pageTitle}" by Wikipedia contributors, licensed under CC BY-SA 4.0.`;
 
-    // Match table rows starting with |-
-    const rows = wikitext.split(/\n\|-\s*\n?/);
+    const tableBlocks = wikitext.split(/\{\|/);
+    for (let t = 1; t < tableBlocks.length; t++) {
+      const tableContent = tableBlocks[t].split(/\|\}/)[0];
+      const rows = tableContent.split(/\n\|-[^\n]*\n?/);
 
-    for (const row of rows) {
-      // Look for [[Title]] links within table cell
-      const links = Array.from(row.matchAll(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g));
-      if (links.length < 2) continue;
+      for (let r = 0; r < rows.length; r++) {
+        const rawRow = rows[r].trim();
+        if (!rawRow || rawRow.startsWith('!') || rawRow.includes('|+')) continue;
 
-      // Extract title from first prominent wikilink in row
-      const firstLink = links[0];
-      const titleCandidate = (firstLink[2] || firstLink[1] || '').trim();
-      if (
-        !titleCandidate ||
-        titleCandidate.startsWith('File:') ||
-        titleCandidate.startsWith('Category:') ||
-        titleCandidate.includes('grossing') ||
-        titleCandidate.includes('cinema')
-      ) {
-        continue;
+        // Extract cells separated by newlines with | or inline ||
+        const rawCells = rawRow.split(/\n\||\|\|/);
+        const cleanedCells: string[] = [];
+
+        for (const cell of rawCells) {
+          let clean = cell.trim();
+          if (!clean) continue;
+          if (clean.startsWith('|')) clean = clean.substring(1).trim();
+          // Remove table cell parameters like style="..." | or rowspan=2 |
+          const pipeIdx = clean.indexOf('|');
+          if (
+            pipeIdx !== -1 &&
+            (clean.includes('style=') ||
+              clean.includes('rowspan=') ||
+              clean.includes('colspan=') ||
+              clean.includes('align=') ||
+              clean.includes('bgcolor=') ||
+              clean.includes('class='))
+          ) {
+            clean = clean.substring(pipeIdx + 1).trim();
+          }
+          const text = this.cleanWikilink(clean);
+          if (
+            text &&
+            !text.startsWith('class=') &&
+            !text.startsWith('style=') &&
+            !text.startsWith('margin:')
+          ) {
+            cleanedCells.push(text);
+          }
+        }
+
+        if (cleanedCells.length === 0) continue;
+
+        // Identify Title, Director, Cast
+        let foundTitle = '';
+        let foundDirector = '';
+        let foundCast: string[] = [];
+
+        for (let i = 0; i < cleanedCells.length; i++) {
+          const val = cleanedCells[i];
+          // Skip month names and day numbers
+          if (
+            val.match(
+              /^(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2})$/i
+            )
+          ) {
+            continue;
+          }
+          // Skip header words and table markers
+          if (
+            val.includes('class=') ||
+            val.includes('wikitable') ||
+            val.toLowerCase().includes('grossing') ||
+            val.toLowerCase().includes('rank') ||
+            val.toLowerCase().includes('opening') ||
+            val.toLowerCase().includes('ref.') ||
+            val.toLowerCase().includes('references')
+          ) {
+            continue;
+          }
+          if (!foundTitle) {
+            foundTitle = val;
+          } else if (!foundDirector) {
+            foundDirector = val;
+          } else if (foundCast.length === 0) {
+            foundCast = val
+              .split(/,\s*|\band\b/i)
+              .map((s) => s.trim())
+              .filter((s) => s.length > 1);
+          }
+        }
+
+        if (foundTitle && foundTitle.length > 1) {
+          const slug = foundTitle
+            .toLowerCase()
+            .replace(/[^\w\s-]/g, '')
+            .trim()
+            .replace(/[\s_-]+/g, '-');
+
+          if (
+            slug.length >= 2 &&
+            !slug.includes('wikitable') &&
+            !slug.includes('highest-grossing') &&
+            !slug.includes('box-office')
+          ) {
+            records.push({
+              id: `WIKI_${lang.toUpperCase()}_${year}_${slug}`,
+              title: foundTitle,
+              originalTitle: foundTitle,
+              language: lang,
+              releaseYear: year,
+              releaseDate: `${year}-06-15`,
+              directors: foundDirector ? [foundDirector] : ['Director'],
+              cast: foundCast.length >= 2 ? foundCast : ['Lead Actor', 'Supporting Actor'],
+              sourceArticleUrl,
+              attribution,
+            });
+          }
+        }
       }
-
-      const slug = titleCandidate
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, '')
-        .trim()
-        .replace(/[\s_-]+/g, '-');
-
-      if (!slug || slug.length < 2) continue;
-
-      const id = `WIKI_${lang.toUpperCase()}_${year}_${slug}`;
-
-      // Extract directors and cast from subsequent wikilinks
-      const otherEntities = links.slice(1).map((l) => (l[2] || l[1] || '').trim());
-      const directors = otherEntities.slice(0, 1);
-      const cast = otherEntities.slice(1, 6);
-
-      const record: WikipediaFilmRecord = {
-        id,
-        title: titleCandidate,
-        originalTitle: titleCandidate,
-        language: lang,
-        releaseYear: year,
-        releaseDate: `${year}-06-15`,
-        directors: directors.length > 0 ? directors : ['Director'],
-        cast: cast.length >= 2 ? cast : ['Lead Actor', 'Supporting Actor'],
-        sourceArticleUrl,
-        attribution,
-      };
-
-      records.push(record);
     }
 
-    return records;
+    // Deduplicate by ID within the year
+    const seen = new Set<string>();
+    return records.filter((m) => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
+  }
+
+  /**
+   * Fetches annual filmography wikitext from MediaWiki API and parses table rows.
+   */
+  public async fetchYearFilmography(
+    lang: 'te' | 'hi',
+    year: number
+  ): Promise<WikipediaFilmRecord[]> {
+    const pageTitle =
+      lang === 'te' ? `List_of_Telugu_films_of_${year}` : `List_of_Hindi_films_of_${year}`;
+    const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${pageTitle}&prop=wikitext&format=json`;
+
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'AAtaChusthava/1.0 (https://github.com/Lalith2007/AAta-Chusthava; contact: admin@aatachusthava.com)',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!res.ok) {
+        console.warn(`Wikipedia MediaWiki API HTTP ${res.status} for ${pageTitle}`);
+        return [];
+      }
+
+      const data = await res.json();
+      if (data.error) {
+        console.warn(`Wikipedia API error for ${pageTitle}:`, data.error);
+        return [];
+      }
+
+      const wikitext = data?.parse?.wikitext?.['*'];
+      if (!wikitext) {
+        console.warn(`No wikitext returned for ${pageTitle}`);
+        return [];
+      }
+
+      const extracted = this.parseWikitextFilmography(wikitext, lang, year, pageTitle);
+      for (const rec of extracted) {
+        this.cache.set(rec.id, rec);
+      }
+      return extracted;
+    } catch (e: unknown) {
+      console.warn(`Network fallback for Wikipedia ${pageTitle}:`, e instanceof Error ? e.message : String(e));
+      return Array.from(this.cache.values()).filter(
+        (m) => m.language === lang && m.releaseYear === year
+      );
+    }
   }
 
   private seedBaselineCache() {
@@ -263,7 +368,8 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
         musicDirectors: ['Devi Sri Prasad'],
         productionHouse: 'Annapurna Studios',
         sourceArticleUrl: 'https://en.wikipedia.org/wiki/List_of_Telugu_films_of_2002',
-        attribution: 'Derived from Wikipedia article "List of Telugu films of 2002" by Wikipedia contributors, CC BY-SA 4.0.',
+        attribution:
+          'Derived from Wikipedia article "List of Telugu films of 2002" by Wikipedia contributors, CC BY-SA 4.0.',
       },
       {
         id: 'WIKI_TE_2023_waltair-veerayya',
@@ -277,7 +383,8 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
         musicDirectors: ['Devi Sri Prasad'],
         productionHouse: 'Mythri Movie Makers',
         sourceArticleUrl: 'https://en.wikipedia.org/wiki/List_of_Telugu_films_of_2023',
-        attribution: 'Derived from Wikipedia article "List of Telugu films of 2023" by Wikipedia contributors, CC BY-SA 4.0.',
+        attribution:
+          'Derived from Wikipedia article "List of Telugu films of 2023" by Wikipedia contributors, CC BY-SA 4.0.',
       },
       {
         id: 'WIKI_HI_2023_jawan',
@@ -291,7 +398,8 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
         musicDirectors: ['Anirudh Ravichander'],
         productionHouse: 'Red Chillies Entertainment',
         sourceArticleUrl: 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2023',
-        attribution: 'Derived from Wikipedia article "List of Hindi films of 2023" by Wikipedia contributors, CC BY-SA 4.0.',
+        attribution:
+          'Derived from Wikipedia article "List of Hindi films of 2023" by Wikipedia contributors, CC BY-SA 4.0.',
       },
       {
         id: 'WIKI_TE_2024_hanuman',
@@ -305,7 +413,8 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
         musicDirectors: ['GowraHari', 'Anudeep Dev'],
         productionHouse: 'Primeshow Entertainment',
         sourceArticleUrl: 'https://en.wikipedia.org/wiki/List_of_Telugu_films_of_2024',
-        attribution: 'Derived from Wikipedia article "List of Telugu films of 2024" by Wikipedia contributors, CC BY-SA 4.0.',
+        attribution:
+          'Derived from Wikipedia article "List of Telugu films of 2024" by Wikipedia contributors, CC BY-SA 4.0.',
       },
       {
         id: 'WIKI_HI_2024_fighter',
@@ -319,7 +428,8 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
         musicDirectors: ['Vishal-Shekhar'],
         productionHouse: 'Marflix Pictures',
         sourceArticleUrl: 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2024',
-        attribution: 'Derived from Wikipedia article "List of Hindi films of 2024" by Wikipedia contributors, CC BY-SA 4.0.',
+        attribution:
+          'Derived from Wikipedia article "List of Hindi films of 2024" by Wikipedia contributors, CC BY-SA 4.0.',
       },
     ];
 
