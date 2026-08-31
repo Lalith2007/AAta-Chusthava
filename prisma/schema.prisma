@@ -535,3 +535,32 @@ model AdminUser {
   @@index([username])
   @@index([email])
 }
+
+model CatalogImportJob {
+  id                String    @id @default(uuid())
+  sourceCode        String
+  sourceType        String    @default("CSV") // "API" | "BULK_FILE" | "JSON_FEED" | "CSV" | "STRUCTURED_DATASET"
+  inputReference    String
+  format            String    @default("CSV") // "CSV" | "JSON" | "NDJSON" | "API"
+  status            String    @default("QUEUED") // "QUEUED" | "RUNNING" | "PAUSED" | "COMPLETED" | "FAILED" | "PARTIAL"
+  recordsDiscovered Int       @default(0)
+  recordsProcessed  Int       @default(0)
+  recordsAccepted   Int       @default(0)
+  recordsMatched    Int       @default(0)
+  recordsDuplicated Int       @default(0)
+  recordsReviewed   Int       @default(0)
+  recordsRejected   Int       @default(0)
+  recordsFailed     Int       @default(0)
+  checkpointRow     Int       @default(0)
+  checkpointCursor  String?
+  checkpointMeta    Json?
+  lastError         String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([sourceCode])
+  @@index([status])
+}
+
