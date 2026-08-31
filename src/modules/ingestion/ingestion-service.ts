@@ -822,32 +822,61 @@ export class IngestionService {
     const boxOffice = record.revenue && record.revenue > 0 ? record.revenue : null;
     const boxOfficeStatus = boxOffice ? 'REPORTED' : 'UNKNOWN';
 
-    const movie = await prisma.movie.create({
-      data: {
-        slug,
-        primaryTitle: record.title,
-        originalTitle: record.originalTitle,
-        alternativeTitles: record.alternativeTitles,
-        supportedLanguages: [primaryLang],
-        industries: [industry],
-        countries: ['IN'],
-        releaseDate: record.releaseDate ? new Date(record.releaseDate) : null,
-        releaseYear,
-        canonicalIndiaReleaseDate: record.releaseDate ? new Date(record.releaseDate) : null,
-        budget: record.budget && record.budget > 0 ? record.budget : null,
-        boxOffice,
-        boxOfficeStatus,
-        rating: record.rating || null,
-        ratingVoteCount: record.voteCount || 0,
-        ratingSource: 'WIKIDATA',
-        posterAsset: record.posterUrl || null,
-        backdropAsset: record.backdropUrl || null,
-        tmdbId: record.tmdbId || null,
-        imdbId: record.imdbId || null,
-        wikidataId: record.id,
-        lifecycleStatus: 'ACTIVE',
-      },
-    });
+    let movie;
+    try {
+      movie = await prisma.movie.create({
+        data: {
+          slug,
+          primaryTitle: record.title,
+          originalTitle: record.originalTitle,
+          alternativeTitles: record.alternativeTitles,
+          supportedLanguages: [primaryLang],
+          industries: [industry],
+          countries: ['IN'],
+          releaseDate: record.releaseDate ? new Date(record.releaseDate) : null,
+          releaseYear,
+          canonicalIndiaReleaseDate: record.releaseDate ? new Date(record.releaseDate) : null,
+          budget: record.budget && record.budget > 0 ? record.budget : null,
+          boxOffice,
+          boxOfficeStatus,
+          rating: record.rating || null,
+          ratingVoteCount: record.voteCount || 0,
+          ratingSource: 'WIKIDATA',
+          posterAsset: record.posterUrl || null,
+          backdropAsset: record.backdropUrl || null,
+          tmdbId: record.tmdbId || null,
+          imdbId: record.imdbId || null,
+          wikidataId: record.id,
+          lifecycleStatus: 'ACTIVE',
+        },
+      });
+    } catch (createErr: any) {
+      if (createErr.code === 'P2002' || createErr.message?.includes('Unique constraint')) {
+        const raceMatched = await prisma.movie.findUnique({ where: { slug } });
+        if (raceMatched) {
+          await prisma.ingestionCandidate.update({
+            where: { id: candidate.id },
+            data: {
+              status: 'DUPLICATE',
+              rawSourceRecordId: rawRecord.id,
+              processedAt: new Date(),
+              resolutionReason: 'DUPLICATE_CANONICAL_MATCH',
+              duplicateOfMovieId: raceMatched.id,
+            },
+          });
+          return {
+            candidateId: candidate.id,
+            movieId: raceMatched.id,
+            status: 'PROCESSED',
+            title: raceMatched.primaryTitle,
+            isNewCanonicalMovie: false,
+            isDuplicate: true,
+            reason: 'Duplicate reconciled during concurrent creation',
+          };
+        }
+      }
+      throw createErr;
+    }
 
     // Ingest Genres
     for (const g of record.genres) {

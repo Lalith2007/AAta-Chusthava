@@ -48,6 +48,9 @@ export interface SourceComparisonReport {
   tmdbOnlyCanonical: number;
   secondaryOnlyCanonical: number;
   bothSourcesCanonical: number;
+  neitherSourceCanonical: number;
+  sourceMatrixSum: number;
+  sourceMatrixReconciled: boolean;
   newCanonicalContributedBySecondary: number;
 }
 
@@ -90,6 +93,7 @@ export interface CatalogCoverageReport {
   invariants: {
     languageReconciliationPass: boolean;
     yearReconciliationPass: boolean;
+    sourceMatrixReconciliationPass: boolean;
     zeroDuplicateCanonicalMovies: boolean;
   };
 }
@@ -276,6 +280,9 @@ export class CatalogCoverageService {
     const secondaryNewMovies = movies.filter((m) => m.wikidataId !== null && m.tmdbId === null).length;
     const tmdbOnlyCanonical = movies.filter((m) => m.tmdbId !== null && m.wikidataId === null).length;
     const bothSourcesCanonical = movies.filter((m) => m.tmdbId !== null && m.wikidataId !== null).length;
+    const neitherSourceCanonical = movies.filter((m) => m.tmdbId === null && m.wikidataId === null).length;
+    const sourceMatrixSum = tmdbOnlyCanonical + secondaryNewMovies + bothSourcesCanonical + neitherSourceCanonical;
+    const sourceMatrixReconciled = sourceMatrixSum === totalMovies;
 
     const sourceBreakdown: SourceCoverageItem[] = registeredSources.map((s) => {
       if (s.code === 'TMDB') {
@@ -334,6 +341,9 @@ export class CatalogCoverageService {
       tmdbOnlyCanonical,
       secondaryOnlyCanonical: secondaryNewMovies,
       bothSourcesCanonical,
+      neitherSourceCanonical,
+      sourceMatrixSum,
+      sourceMatrixReconciled,
       newCanonicalContributedBySecondary: wikidataValidatedCandidates,
     };
 
@@ -410,6 +420,7 @@ export class CatalogCoverageService {
       invariants: {
         languageReconciliationPass: isLanguageReconciled,
         yearReconciliationPass: globalYearsReconciled && yearTargetsReconciled && playableBothConsistent,
+        sourceMatrixReconciliationPass: sourceMatrixReconciled,
         zeroDuplicateCanonicalMovies,
       },
     };
