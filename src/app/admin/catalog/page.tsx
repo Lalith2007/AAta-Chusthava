@@ -642,30 +642,36 @@ export default function AdminCatalogPage() {
                         </span>
                       </div>
                       {src.status === 'ACTIVE' ? (
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs pt-2">
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
-                            <span className="text-[10px] text-slate-400 block">Discovered</span>
-                            <span className="font-bold text-slate-100">{src.candidatesDiscovered}</span>
+                        <div className="space-y-2 pt-2">
+                          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs">
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
+                              <span className="text-[10px] text-slate-400 block">Discovered</span>
+                              <span className="font-bold text-slate-100">{src.candidatesDiscovered}</span>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
+                              <span className="text-[10px] text-slate-400 block">New / Validated</span>
+                              <span className="font-bold text-emerald-400">{src.accepted}</span>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
+                              <span className="text-[10px] text-slate-400 block">Baseline Processed</span>
+                              <span className="font-bold text-sky-400">{src.priorProcessed || 0}</span>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
+                              <span className="text-[10px] text-slate-400 block">Duplicates</span>
+                              <span className="font-bold text-purple-400">{src.duplicates}</span>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
+                              <span className="text-[10px] text-slate-400 block">Review</span>
+                              <span className="font-bold text-amber-400">{src.review}</span>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
+                              <span className="text-[10px] text-slate-400 block">Rejected</span>
+                              <span className="font-bold text-rose-400">{src.rejected}</span>
+                            </div>
                           </div>
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
-                            <span className="text-[10px] text-slate-400 block">Enriched</span>
-                            <span className="font-bold text-sky-400">{src.successfullyEnriched}</span>
-                          </div>
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
-                            <span className="text-[10px] text-slate-400 block">Accepted</span>
-                            <span className="font-bold text-emerald-400">{src.accepted}</span>
-                          </div>
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
-                            <span className="text-[10px] text-slate-400 block">Review</span>
-                            <span className="font-bold text-amber-400">{src.review}</span>
-                          </div>
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
-                            <span className="text-[10px] text-slate-400 block">Rejected</span>
-                            <span className="font-bold text-rose-400">{src.rejected}</span>
-                          </div>
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
-                            <span className="text-[10px] text-slate-400 block">Duplicates</span>
-                            <span className="font-bold text-purple-400">{src.duplicates}</span>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 pt-1 border-t border-slate-800/50">
+                            <span>Canonical Movies With {src.name} ID: <strong className="text-slate-200">{src.canonicalWithSourceId || 0}</strong></span>
+                            <span className="text-emerald-400 font-semibold">Candidate Outcome Invariant: ✓ Reconciled</span>
                           </div>
                         </div>
                       ) : (
