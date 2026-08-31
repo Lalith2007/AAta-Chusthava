@@ -361,6 +361,23 @@ model IngestionCandidate {
   @@index([source])
 }
 
+model DiscoveryCheckpoint {
+  id              String   @id @default(uuid())
+  source          String
+  language        String
+  year            Int
+  page            Int      @default(1)
+  status          String   @default("COMPLETED")
+  candidatesFound Int      @default(0)
+  candidatesSaved Int      @default(0)
+  lastError       String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@unique([source, language, year])
+  @@index([source, language])
+}
+
 model GameRuleset {
   id                     String   @id @default(uuid())
   name                   String   @unique
