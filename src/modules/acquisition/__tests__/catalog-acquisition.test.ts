@@ -165,11 +165,28 @@ describe('Generic Catalog Acquisition Framework', () => {
     });
 
     it('processes batch import with deduplication and candidate provenance', async () => {
-      // Row 1: Duplicate of an existing canonical movie (Bommarillu 2006)
+      const existingSlug = 'fixture-preexisting-movie-2020';
+      // Ensure existing movie is present in DB for deduplication verification
+      await prisma.movie.upsert({
+        where: { slug: existingSlug },
+        create: {
+          slug: existingSlug,
+          primaryTitle: 'Fixture Preexisting Movie',
+          originalTitle: 'Fixture Preexisting Movie',
+          releaseYear: 2020,
+          supportedLanguages: ['TELUGU'],
+          industries: ['TOLLYWOOD'],
+          countries: ['IN'],
+          lifecycleStatus: 'ACTIVE',
+        },
+        update: {},
+      });
+
+      // Row 1: Duplicate of the preexisting canonical movie
       // Row 2: Malformed row
       // Row 3: New isolated test candidate
       const csv = `title,releaseYear,languages,directors,cast,genres,overview
-"Bommarillu",2006,"TELUGU","Bhaskar","Siddharth, Genelia D'Souza","Romance, Drama","Existing canonical movie"
+"Fixture Preexisting Movie",2020,"TELUGU","Existing Director","Actor A, Actor B","Drama","Existing canonical movie"
 "",2020,"TELUGU","Bad Director","Actor","Malformed Row"
 "Fixture Test Movie Acquisition",2024,"TELUGU","Fixture Director","Actor 1, Actor 2","Action","Test movie"`;
 
@@ -180,7 +197,7 @@ describe('Generic Catalog Acquisition Framework', () => {
       expect(outcome.status).toBe('PARTIAL'); // Because 1 row was malformed
       expect(outcome.recordsDiscovered).toBe(3);
       expect(outcome.recordsProcessed).toBe(2);
-      expect(outcome.recordsDuplicated).toBeGreaterThanOrEqual(1); // Bommarillu matched existing
+      expect(outcome.recordsDuplicated).toBeGreaterThanOrEqual(1); // Preexisting movie matched existing
       expect(outcome.recordsAccepted).toBe(1); // Fixture movie created
       expect(outcome.recordsFailed).toBe(1); // Malformed row
       expect(outcome.checkpointRow).toBe(2); // Processed both valid records
@@ -201,6 +218,14 @@ describe('Generic Catalog Acquisition Framework', () => {
       expect(newMovie?.primaryTitle).toBe('Fixture Test Movie Acquisition');
       expect(newMovie?.eligibility?.playableAsGuess).toBe(true);
       expect(newMovie?.eligibility?.playableAsTarget).toBe(true);
+
+      // Clean up preexisting fixture movie
+      const preExisting = await prisma.movie.findUnique({ where: { slug: existingSlug } });
+      if (preExisting) {
+        await prisma.gameEligibility.deleteMany({ where: { movieId: preExisting.id } });
+        await prisma.moviePerson.deleteMany({ where: { movieId: preExisting.id } });
+        await prisma.movie.delete({ where: { id: preExisting.id } });
+      }
     });
 
     it('demonstrates idempotency: re-running the same import job produces zero duplicates', async () => {
