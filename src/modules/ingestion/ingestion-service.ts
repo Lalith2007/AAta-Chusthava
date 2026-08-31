@@ -1,6 +1,7 @@
 import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter, MovieDataSource, TmdbMovieDetails, TmdbCredits } from '@/infrastructure/external-sources/tmdb-adapter';
 import { wikidataDiscoveryAdapter, WikidataMovieRecord } from '@/infrastructure/external-sources/wikidata-adapter';
+import { wikipediaDiscoveryAdapter } from '@/infrastructure/external-sources/wikipedia-adapter';
 import { DiscoverySourceRegistry } from '@/infrastructure/external-sources/discovery-source';
 import { MovieLanguage, MovieIndustry, RoleType, RelationType, ProductionHouseRole } from '@/domain/movie/types';
 import { queueService } from '@/infrastructure/queue/queue-service';
@@ -203,6 +204,10 @@ export class IngestionService {
 
       if (candidate.source.toUpperCase() === 'WIKIDATA') {
         return this.processWikidataCandidate(candidate);
+      }
+
+      if (candidate.source.toUpperCase() === 'WIKIPEDIA') {
+        return this.processWikipediaCandidate(candidate);
       }
 
       // --- TMDB / Standard Ingestion Flow ---
@@ -1087,6 +1092,239 @@ export class IngestionService {
       isNewCanonicalMovie: true,
       isDuplicate: false,
       reason: 'New unique movie created from secondary Wikidata discovery',
+    };
+  }
+
+  private async processWikipediaCandidate(candidate: {
+    id: string;
+    source: string;
+    sourceMovieId: string;
+  }): Promise<IngestionResult> {
+    const identity = await wikipediaDiscoveryAdapter.getCandidateIdentity(candidate.sourceMovieId);
+    const metadata = await wikipediaDiscoveryAdapter.getMetadata(candidate.sourceMovieId);
+    const credits = await wikipediaDiscoveryAdapter.getCredits(candidate.sourceMovieId);
+    const releaseData = await wikipediaDiscoveryAdapter.getReleaseData(candidate.sourceMovieId);
+
+    const rawRecord = await prisma.rawSourceRecord.upsert({
+      where: {
+        source_sourceRecordId: {
+          source: 'WIKIPEDIA',
+          sourceRecordId: candidate.sourceMovieId,
+        },
+      },
+      create: {
+        source: 'WIKIPEDIA',
+        sourceRecordId: candidate.sourceMovieId,
+        payload: { identity, metadata, credits, releaseData } as any,
+      },
+      update: {
+        payload: { identity, metadata, credits, releaseData } as any,
+        fetchedAt: new Date(),
+      },
+    });
+
+    const releaseYear = identity.releaseYear;
+    if (!releaseYear || releaseYear < 2002) {
+      await prisma.ingestionCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'REJECTED',
+          error: 'Release year prior to 2002 or invalid',
+          processedAt: new Date(),
+          resolutionReason: 'REJECTED_YEAR_BEFORE_2002',
+        },
+      });
+      return {
+        candidateId: candidate.id,
+        status: 'SKIPPED',
+        title: identity.title,
+        reason: 'Year before 2002',
+      };
+    }
+
+    const primaryLang = this.mapLanguage(identity.primaryLanguage === 'TELUGU' ? 'te' : 'hi');
+    const industry = this.mapIndustry(primaryLang);
+    const slug = this.slugify(identity.title, releaseYear);
+
+    // Deduplication checks
+    let matchedMovie = await prisma.movie.findUnique({ where: { slug } });
+    if (!matchedMovie) {
+      matchedMovie = await prisma.movie.findFirst({
+        where: {
+          primaryTitle: { equals: identity.title, mode: 'insensitive' },
+          releaseYear,
+        },
+      });
+    }
+
+    if (matchedMovie) {
+      await prisma.ingestionCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'DUPLICATE',
+          rawSourceRecordId: rawRecord.id,
+          processedAt: new Date(),
+          resolutionReason: 'DUPLICATE_CANONICAL_MATCH',
+          duplicateOfMovieId: matchedMovie.id,
+        },
+      });
+      return {
+        candidateId: candidate.id,
+        movieId: matchedMovie.id,
+        status: 'PROCESSED',
+        title: matchedMovie.primaryTitle,
+        isNewCanonicalMovie: false,
+        isDuplicate: true,
+        reason: 'Duplicate matched and reconciled with existing canonical movie',
+      };
+    }
+
+    // New Canonical Movie
+    const isTargetPlayable = credits.directors.length > 0 && credits.cast.length >= 2;
+
+    const movie = await prisma.movie.create({
+      data: {
+        slug,
+        primaryTitle: identity.title,
+        originalTitle: identity.originalTitle,
+        alternativeTitles: releaseData.alternativeTitles,
+        supportedLanguages: [primaryLang],
+        industries: [industry],
+        countries: ['IN'],
+        releaseDate: releaseData.releaseDate ? new Date(releaseData.releaseDate) : null,
+        releaseYear,
+        canonicalIndiaReleaseDate: releaseData.releaseDate ? new Date(releaseData.releaseDate) : null,
+        boxOfficeStatus: 'UNKNOWN',
+        lifecycleStatus: 'ACTIVE',
+      },
+    });
+
+    // Create Genres
+    for (const g of metadata.genres) {
+      const gSlug = g.name.toLowerCase().replace(/[^\w]/g, '-');
+      let genreRecord = await prisma.genre.findUnique({ where: { slug: gSlug } });
+      if (!genreRecord) {
+        genreRecord = await prisma.genre.create({
+          data: {
+            canonicalName: g.name,
+            slug: gSlug,
+          },
+        });
+      }
+      await prisma.movieGenre.upsert({
+        where: {
+          movieId_genreId: {
+            movieId: movie.id,
+            genreId: genreRecord.id,
+          },
+        },
+        create: {
+          movieId: movie.id,
+          genreId: genreRecord.id,
+        },
+        update: {},
+      });
+    }
+
+    // Create Directors
+    for (const d of credits.directors) {
+      let person = await prisma.person.findFirst({
+        where: { canonicalName: { equals: d.name, mode: 'insensitive' } },
+      });
+      if (!person) {
+        person = await prisma.person.create({
+          data: {
+            canonicalName: d.name,
+          },
+        });
+      }
+      await prisma.moviePerson.upsert({
+        where: {
+          movieId_personId_roleType_relationType: {
+            movieId: movie.id,
+            personId: person.id,
+            roleType: 'DIRECTOR',
+            relationType: 'CREW',
+          },
+        },
+        create: {
+          movieId: movie.id,
+          personId: person.id,
+          roleType: 'DIRECTOR',
+          relationType: 'CREW',
+          job: 'Director',
+          department: 'Directing',
+        },
+        update: {},
+      });
+    }
+
+    // Create Cast
+    for (let i = 0; i < credits.cast.length; i++) {
+      const c = credits.cast[i];
+      let person = await prisma.person.findFirst({
+        where: { canonicalName: { equals: c.name, mode: 'insensitive' } },
+      });
+      if (!person) {
+        person = await prisma.person.create({
+          data: {
+            canonicalName: c.name,
+          },
+        });
+      }
+      const roleType: RoleType = i < 2 ? 'LEAD' : 'SUPPORTING';
+      await prisma.moviePerson.upsert({
+        where: {
+          movieId_personId_roleType_relationType: {
+            movieId: movie.id,
+            personId: person.id,
+            roleType,
+            relationType: 'CAST',
+          },
+        },
+        create: {
+          movieId: movie.id,
+          personId: person.id,
+          roleType,
+          relationType: 'CAST',
+          characterName: c.character || 'Lead',
+          billingOrder: c.order ?? i,
+        },
+        update: {
+          billingOrder: c.order ?? i,
+        },
+      });
+    }
+
+    await prisma.gameEligibility.create({
+      data: {
+        movieId: movie.id,
+        playableAsGuess: true,
+        playableAsTarget: isTargetPlayable,
+        minimumMetadataComplete: isTargetPlayable,
+        reviewStatus: isTargetPlayable ? 'APPROVED' : 'PENDING',
+        updatedAt: new Date(),
+      },
+    });
+
+    await prisma.ingestionCandidate.update({
+      where: { id: candidate.id },
+      data: {
+        status: 'VALIDATED',
+        rawSourceRecordId: rawRecord.id,
+        processedAt: new Date(),
+        resolutionReason: isTargetPlayable ? 'ACCEPTED_NEW_CANONICAL' : 'ACCEPTED_NEEDS_REVIEW',
+      },
+    });
+
+    return {
+      candidateId: candidate.id,
+      movieId: movie.id,
+      status: isTargetPlayable ? 'PROCESSED' : 'REVIEW_REQUIRED',
+      title: movie.primaryTitle,
+      isNewCanonicalMovie: true,
+      isDuplicate: false,
+      reason: 'New unique movie created from secondary Wikipedia filmography discovery',
     };
   }
 

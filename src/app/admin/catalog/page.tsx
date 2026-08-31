@@ -788,6 +788,7 @@ export default function AdminCatalogPage() {
                     >
                       <option value="TMDB">The Movie Database (TMDB) [Active]</option>
                       <option value="WIKIDATA">Wikidata Open Knowledge Graph [Active]</option>
+                      <option value="WIKIPEDIA">Wikipedia Filmography (Open CC BY-SA 4.0) [Active]</option>
                       <option value="IMDB" disabled>IMDb [Awaiting License]</option>
                     </select>
                   </div>
