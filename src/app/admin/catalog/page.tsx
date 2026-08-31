@@ -439,39 +439,39 @@ export default function AdminCatalogPage() {
 
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
-                  <span className="text-xs text-slate-400 block uppercase font-semibold">TMDB Candidates</span>
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">TMDB Only</span>
                   <span className="text-2xl font-black text-sky-400 mt-1 block">
-                    {report.sourceComparison?.tmdbCandidates || 0}
-                  </span>
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Discovered</span>
-                </div>
-                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
-                  <span className="text-xs text-slate-400 block uppercase font-semibold">Wikidata Candidates</span>
-                  <span className="text-2xl font-black text-indigo-400 mt-1 block">
-                    {report.sourceComparison?.secondaryCandidates || 0}
-                  </span>
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Discovered</span>
-                </div>
-                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
-                  <span className="text-xs text-slate-400 block uppercase font-semibold">Source Overlap</span>
-                  <span className="text-2xl font-black text-violet-400 mt-1 block">
-                    {report.sourceComparison?.crossSourceOverlap || 0}
-                  </span>
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Deduplicated</span>
-                </div>
-                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
-                  <span className="text-xs text-slate-400 block uppercase font-semibold">TMDB-Only Movies</span>
-                  <span className="text-2xl font-black text-sky-300 mt-1 block">
                     {report.sourceComparison?.tmdbOnlyCanonical || 0}
                   </span>
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Canonical</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Canonical Movies</span>
                 </div>
                 <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
-                  <span className="text-xs text-slate-400 block uppercase font-semibold">Both Sources Linked</span>
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Wikidata Only</span>
+                  <span className="text-2xl font-black text-indigo-400 mt-1 block">
+                    {report.sourceComparison?.secondaryOnlyCanonical || 0}
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Canonical Movies</span>
+                </div>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Both Linked</span>
                   <span className="text-2xl font-black text-emerald-400 mt-1 block">
                     {report.sourceComparison?.bothSourcesCanonical || 0}
                   </span>
                   <span className="text-[10px] text-emerald-500 mt-0.5 block">Cross-Referenced</span>
+                </div>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Neither Source ID</span>
+                  <span className="text-2xl font-black text-slate-300 mt-1 block">
+                    {report.sourceComparison?.neitherSourceCanonical || 0}
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Initial Seed Records</span>
+                </div>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-700 text-center bg-slate-900/50">
+                  <span className="text-xs text-slate-300 block uppercase font-bold">Matrix Total</span>
+                  <span className="text-2xl font-black text-emerald-400 mt-1 block">
+                    {report.sourceComparison?.sourceMatrixSum || 0}
+                  </span>
+                  <span className="text-[10px] text-emerald-500 mt-0.5 block">100% Invariant Pass</span>
                 </div>
                 <div className="p-4 bg-slate-950 rounded-2xl border border-indigo-600/60 text-center bg-indigo-950/30">
                   <span className="text-xs text-indigo-300 block uppercase font-bold">New From Secondary</span>

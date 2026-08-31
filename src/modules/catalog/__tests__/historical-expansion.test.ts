@@ -106,11 +106,54 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     // 5. Invariant flags
     expect(report.invariants.languageReconciliationPass).toBe(true);
     expect(report.invariants.yearReconciliationPass).toBe(true);
+    expect(report.invariants.sourceMatrixReconciliationPass).toBe(true);
     expect(report.invariants.zeroDuplicateCanonicalMovies).toBe(true);
     expect(report.coverageStatus).toBe('PARTIAL');
   });
 
-  it('6. Preserves honest PARTIAL coverage status after batch expansion', async () => {
+  it('6. Reconciles the 4-part source cross-reference matrix (TMDB-only + Wikidata-only + Both + Neither = Total)', async () => {
+    const report = await catalogCoverageService.getCoverageReport();
+    const sc = report.sourceComparison;
+
+    expect(sc).toBeDefined();
+    expect(sc.tmdbOnlyCanonical).toBeGreaterThan(0);
+    expect(sc.secondaryOnlyCanonical).toBeGreaterThan(0);
+    expect(sc.bothSourcesCanonical).toBe(8);
+    expect(sc.neitherSourceCanonical).toBe(10);
+
+    const matrixSum =
+      sc.tmdbOnlyCanonical + sc.secondaryOnlyCanonical + sc.bothSourcesCanonical + sc.neitherSourceCanonical;
+    expect(matrixSum).toBe(report.totals.totalMovies);
+    expect(sc.sourceMatrixSum).toBe(report.totals.totalMovies);
+    expect(sc.sourceMatrixReconciled).toBe(true);
+  });
+
+  it('7. Verifies the exact baseline 90 -> 100 transition (+10 new canonical movies)', async () => {
+    const report = await catalogCoverageService.getCoverageReport();
+    const ep = report.expansionProgress;
+
+    expect(ep.previousCanonicalCount).toBe(90);
+    expect(ep.currentCanonicalCount).toBe(100);
+    expect(ep.newCanonicalContributed).toBe(10);
+    expect(ep.previousCanonicalCount + ep.newCanonicalContributed).toBe(ep.currentCanonicalCount);
+  });
+
+  it('8. Verifies 100 discovery checkpoints (2 sources x 2 languages x 25 years)', async () => {
+    const checkpoints = await prisma.discoveryCheckpoint.findMany();
+    expect(checkpoints.length).toBe(100);
+
+    const tmdbTe = checkpoints.filter((c) => c.source === 'TMDB' && c.language === 'te');
+    const tmdbHi = checkpoints.filter((c) => c.source === 'TMDB' && c.language === 'hi');
+    const wikiTe = checkpoints.filter((c) => c.source === 'WIKIDATA' && c.language === 'te');
+    const wikiHi = checkpoints.filter((c) => c.source === 'WIKIDATA' && c.language === 'hi');
+
+    expect(tmdbTe.length).toBe(25);
+    expect(tmdbHi.length).toBe(25);
+    expect(wikiTe.length).toBe(25);
+    expect(wikiHi.length).toBe(25);
+  });
+
+  it('9. Preserves honest PARTIAL coverage status after batch expansion', async () => {
     const report = await catalogCoverageService.getCoverageReport();
     expect(report.coverageStatus).toBe('PARTIAL');
     expect(report.coverageStatusDescription).toContain('Catalog actively enriched');
