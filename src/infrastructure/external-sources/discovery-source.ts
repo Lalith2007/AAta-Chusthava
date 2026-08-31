@@ -68,7 +68,7 @@ export interface DiscoveryOptions {
   query?: string;
 }
 
-export type DiscoverySourceStatus = 'ACTIVE' | 'NOT_IMPLEMENTED' | 'DISABLED';
+export type DiscoverySourceStatus = 'ACTIVE' | 'SOURCE_CANDIDATE' | 'NOT_IMPLEMENTED' | 'NOT_APPROVED' | 'DISABLED';
 
 export interface DiscoverySourceInfo {
   name: string;
@@ -321,6 +321,45 @@ export class DiscoverySourceRegistry {
         isImplemented: false,
         status: 'NOT_IMPLEMENTED',
         description: 'Secondary reference source for box office verification and industry ratings (connector awaiting commercial API licensing).',
+        capabilities: {
+          discovery: false,
+          credits: false,
+          boxOffice: false,
+          reviews: false,
+        },
+      },
+      {
+        name: 'Open Movie Database (OMDb)',
+        code: 'OMDB',
+        isImplemented: false,
+        status: 'SOURCE_CANDIDATE',
+        description: 'RESTful lookup interface for title-based enrichment and cross-referencing IMDb identifiers.',
+        capabilities: {
+          discovery: false,
+          credits: true,
+          boxOffice: true,
+          reviews: true,
+        },
+      },
+      {
+        name: 'Indiancine.ma Open Archive',
+        code: 'INDIANCINEMA_MA',
+        isImplemented: false,
+        status: 'NOT_APPROVED',
+        description: 'Film research archive; evaluated but not approved due to anti-bot WAF restrictions and robots: NONE policy.',
+        capabilities: {
+          discovery: false,
+          credits: false,
+          boxOffice: false,
+          reviews: false,
+        },
+      },
+      {
+        name: 'National Film Development Corporation (NFDC / CBFC)',
+        code: 'NFDC_CBFC',
+        isImplemented: false,
+        status: 'NOT_IMPLEMENTED',
+        description: 'Official Indian cinema regulatory records; currently lacks public REST/JSON API or structured open dataset feed.',
         capabilities: {
           discovery: false,
           credits: false,
