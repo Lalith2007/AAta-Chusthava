@@ -193,16 +193,17 @@ describe('PR #22 Security Hardening: Admin Authorization & Secret Management', (
   // BLOCKER 2: SECRET MANAGEMENT & INJECTION TESTS
   describe('Blocker 2 — Daily Puzzle Secret Validation & Determinism', () => {
     it('G. fails clearly with fatal error if DAILY_PUZZLE_SECRET is missing in production mode', () => {
-      const oldEnv = process.env.NODE_ENV;
-      const oldSecret = process.env.DAILY_PUZZLE_SECRET;
+      const envObj = process.env as Record<string, string | undefined>;
+      const oldEnv = envObj.NODE_ENV;
+      const oldSecret = envObj.DAILY_PUZZLE_SECRET;
       try {
-        process.env.NODE_ENV = 'production';
-        delete process.env.DAILY_PUZZLE_SECRET;
+        envObj.NODE_ENV = 'production';
+        delete envObj.DAILY_PUZZLE_SECRET;
 
         expect(() => new DailyPuzzleSelector()).toThrow(/FATAL: Missing required environment variable DAILY_PUZZLE_SECRET/);
       } finally {
-        process.env.NODE_ENV = oldEnv;
-        process.env.DAILY_PUZZLE_SECRET = oldSecret;
+        envObj.NODE_ENV = oldEnv;
+        envObj.DAILY_PUZZLE_SECRET = oldSecret;
       }
     });
 
