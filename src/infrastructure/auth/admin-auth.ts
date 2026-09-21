@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { prisma } from '@/infrastructure/db/client';
 import { AppError } from '@/domain/errors';
 import { AdminRole } from '@prisma/client';
 
@@ -44,9 +43,9 @@ export function extractAdminToken(req: NextRequest): string | null {
 }
 
 /**
- * Authenticates the caller as a valid admin identity.
- * Validates against server-configured ADMIN_API_SECRET and/or database AdminUser accounts.
- * Never trusts caller-supplied claims in the JSON body.
+ * Authenticates the caller as a valid root admin identity.
+ * Validates strictly against the server-configured ADMIN_API_SECRET.
+ * Never treats usernames, user IDs, emails, or public identifiers as credentials.
  */
 export async function authenticateAdmin(req: NextRequest): Promise<AuthenticatedAdmin> {
   const token = extractAdminToken(req);
@@ -55,38 +54,22 @@ export async function authenticateAdmin(req: NextRequest): Promise<Authenticated
     throw new AppError('UNAUTHORIZED', 'Authentication required to access admin resources.', 401);
   }
 
-  // 1. Check server-configured root admin secret
-  const rootSecret = process.env.ADMIN_API_SECRET;
-  if (rootSecret && rootSecret.trim().length > 0 && token === rootSecret.trim()) {
-    return {
-      id: 'super-admin-root',
-      username: 'system-admin',
-      role: 'SUPER_ADMIN',
-      permissions: ['*'],
-    };
+  // Check server-configured root admin secret (supporting ADMIN_API_SECRET with fallback to ADMIN_API_KEY)
+  const adminSecret = process.env.ADMIN_API_SECRET || process.env.ADMIN_API_KEY;
+  if (!adminSecret || adminSecret.trim().length === 0) {
+    throw new AppError('UNAUTHORIZED', 'Admin API secret is not configured on the server.', 401);
   }
 
-  // 2. Check registered AdminUser in database
-  try {
-    const adminUser = await prisma.adminUser.findFirst({
-      where: {
-        OR: [{ id: token }, { username: token }],
-      },
-    });
-
-    if (adminUser) {
-      return {
-        id: adminUser.id,
-        username: adminUser.username,
-        role: adminUser.role,
-        permissions: adminUser.permissions,
-      };
-    }
-  } catch (_err) {
-    // Database lookup failed or connection issue
+  if (token !== adminSecret.trim()) {
+    throw new AppError('UNAUTHORIZED', 'Invalid admin authentication credentials.', 401);
   }
 
-  throw new AppError('UNAUTHORIZED', 'Invalid admin authentication credentials.', 401);
+  return {
+    id: 'super-admin-root',
+    username: 'system-admin',
+    role: 'SUPER_ADMIN',
+    permissions: ['*'],
+  };
 }
 
 /**
@@ -101,11 +84,7 @@ export async function requireAdminAuth(
   const admin = await authenticateAdmin(req);
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(admin.role)) {
-    throw new AppError(
-      'FORBIDDEN',
-      `Forbidden: Caller role "${admin.role}" is not authorized for this operation.`,
-      403
-    );
+    throw new AppError('FORBIDDEN', 'Insufficient administrative permissions for this action.', 403);
   }
 
   return admin;

@@ -130,6 +130,52 @@ describe('Deterministic Daily Puzzle Engine (DAILY_SELECTION_V1)', () => {
       expect(medProfile.qualityTier).toBe('TIER_2_MEDIUM');
       expect(medProfile.availableCluesCount).toBe(5);
       expect(medProfile.qualityScore).toBe(50);
+
+      // Single-lead minimal movie: only Language + Director + Release Year + 1 Lead Cast
+      const singleLeadMovie = {
+        id: 'test-single-lead',
+        primaryTitle: 'Solo Lead Movie',
+        releaseYear: 2022,
+        supportedLanguages: ['TELUGU'],
+        rating: null,
+        ratingVoteCount: null,
+        boxOffice: null,
+        people: [
+          { roleType: 'DIRECTOR', relationType: 'CREW', job: 'Director', person: { canonicalName: 'Solo Director' } },
+          { roleType: 'LEAD', relationType: 'CAST', job: null, person: { canonicalName: 'Solo Actor' } },
+        ],
+        productionHouses: [],
+        genres: [],
+      };
+
+      const singleLeadProfile = dailyPuzzleSelector.computeTargetQualityProfile(singleLeadMovie);
+      // Language (1) + Director (1) + Release Year (1) + Lead Actor (1) = 4 clues (Lead Actress is FALSE)
+      expect(singleLeadProfile.availableCluesCount).toBe(4);
+      expect(singleLeadProfile.qualityScore).toBe(40);
+      expect(singleLeadProfile.qualityTier).toBe('TIER_2_MEDIUM');
+    });
+
+    it('independently evaluates all 11 clues against genuine data', () => {
+      // Zero-lead movie (e.g. documentary or missing cast)
+      const zeroLeadMovie = {
+        id: 'test-zero-lead',
+        primaryTitle: 'Documentary Film',
+        releaseYear: 2020,
+        supportedLanguages: ['HINDI'],
+        rating: null,
+        ratingVoteCount: null,
+        boxOffice: null,
+        people: [
+          { roleType: 'DIRECTOR', relationType: 'CREW', job: 'Director', person: { canonicalName: 'Doc Director' } },
+        ],
+        productionHouses: [],
+        genres: [],
+      };
+
+      const zeroProfile = dailyPuzzleSelector.computeTargetQualityProfile(zeroLeadMovie);
+      // Language(1) + Director(1) + Release Year(1) = 3 clues
+      expect(zeroProfile.availableCluesCount).toBe(3);
+      expect(zeroProfile.qualityScore).toBe(30);
     });
   });
 

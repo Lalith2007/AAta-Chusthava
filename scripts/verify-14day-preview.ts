@@ -21,7 +21,7 @@ async function main() {
     const result = await dailyPuzzleSelector.selectDailyTarget(puzzleDate);
     run1Results.push(result);
     console.log(
-      `[${puzzleDate}] Movie: "${result.metadata.selectedTitle}" | Lang: ${result.metadata.language} | Tier: ${result.metadata.qualityTier} | Score: ${result.metadata.qualityScore} | Level: ${result.metadata.fallbackLevel}`
+      `[${puzzleDate}] ID: ${result.selectedMovieId} | Movie: "${result.metadata.selectedTitle}" | Lang: ${result.metadata.language} | Tier: ${result.metadata.qualityTier} | Score: ${result.metadata.qualityScore} | Level: ${result.metadata.fallbackLevel}`
     );
   }
 
@@ -35,11 +35,12 @@ async function main() {
     const match =
       result.selectedMovieId === run1Results[i].selectedMovieId &&
       result.metadata.qualityScore === run1Results[i].metadata.qualityScore &&
+      result.metadata.fallbackLevel === run1Results[i].metadata.fallbackLevel &&
       result.metadata.deterministicPriority === run1Results[i].metadata.deterministicPriority;
 
     if (match) matchCount++;
     console.log(
-      `[${puzzleDate}] Movie: "${result.metadata.selectedTitle}" | Match Run 1: ${match ? 'EXACT MATCH' : 'MISMATCH'}`
+      `[${puzzleDate}] ID: ${result.selectedMovieId} | Movie: "${result.metadata.selectedTitle}" | Match Run 1: ${match ? 'EXACT MATCH' : 'MISMATCH'}`
     );
   }
 

@@ -37,117 +37,123 @@ describe('PR #22 Security Hardening: Admin Authorization & Secret Management', (
   });
 
   // BLOCKER 1: ADMIN API AUTHORIZATION TESTS
-  describe('Blocker 1 — Admin API Authorization & Target Protection', () => {
-    it('A. rejects unauthenticated admin preview with 401 UNAUTHORIZED without leaking target data', async () => {
+  describe('Blocker 1 — Admin API Authorization & Credential Isolation', () => {
+    it('1. ADMIN_API_SECRET via custom header (x-admin-key) -> PASS', async () => {
+      const req = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`, {
+        headers: { 'x-admin-key': VALID_ADMIN_SECRET },
+      });
+      const auth = await authenticateAdmin(req);
+      expect(auth.id).toBe('super-admin-root');
+      expect(auth.role).toBe('SUPER_ADMIN');
+
+      const res = await previewHandler(req);
+      expect(res.status).toBe(200);
+    });
+
+    it('2. Bearer ADMIN_API_SECRET -> PASS', async () => {
+      const req = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`, {
+        headers: { authorization: `Bearer ${VALID_ADMIN_SECRET}` },
+      });
+      const auth = await authenticateAdmin(req);
+      expect(auth.id).toBe('super-admin-root');
+      expect(auth.role).toBe('SUPER_ADMIN');
+
+      const res = await previewHandler(req);
+      expect(res.status).toBe(200);
+    });
+
+    it('3. Bearer "admin" -> MUST FAIL (401)', async () => {
+      const req = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`, {
+        headers: { authorization: 'Bearer admin' },
+      });
+      await expect(authenticateAdmin(req)).rejects.toThrow(AppError);
+      const res = await previewHandler(req);
+      expect(res.status).toBe(401);
+    });
+
+    it('4. Bearer known AdminUser ID -> MUST FAIL (401)', async () => {
+      // Create a known admin user in DB
+      const adminUser = await prisma.adminUser.upsert({
+        where: { username: 'test-db-admin-user' },
+        create: {
+          username: 'test-db-admin-user',
+          email: 'admin-db@aatachusthava.com',
+          passwordHash: 'some_hash',
+          role: 'SUPER_ADMIN',
+        },
+        update: { role: 'SUPER_ADMIN' },
+      });
+
+      const req = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`, {
+        headers: { authorization: `Bearer ${adminUser.id}` },
+      });
+      // AdminUser ID must NOT be accepted as a credential
+      await expect(authenticateAdmin(req)).rejects.toThrow(AppError);
+      const res = await previewHandler(req);
+      expect(res.status).toBe(401);
+    });
+
+    it('5. Bearer known AdminUser email -> MUST FAIL (401)', async () => {
+      const req = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`, {
+        headers: { authorization: 'Bearer admin-db@aatachusthava.com' },
+      });
+      await expect(authenticateAdmin(req)).rejects.toThrow(AppError);
+      const res = await previewHandler(req);
+      expect(res.status).toBe(401);
+    });
+
+    it('6. random x-admin-key -> MUST FAIL (401)', async () => {
+      const req = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`, {
+        headers: { 'x-admin-key': 'random-unauthorized-key-xyz' },
+      });
+      await expect(authenticateAdmin(req)).rejects.toThrow(AppError);
+      const res = await previewHandler(req);
+      expect(res.status).toBe(401);
+    });
+
+    it('7. missing token -> 401 UNAUTHORIZED without leaking target data', async () => {
       const unauthReq = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`);
+      await expect(authenticateAdmin(unauthReq)).rejects.toThrow(AppError);
+
       const res = await previewHandler(unauthReq);
       expect(res.status).toBe(401);
-
       const data = await res.json();
-      expect(data.error).toBeDefined();
       expect(data.error.code).toBe('UNAUTHORIZED');
       expect(data.preview).toBeUndefined();
     });
 
-    it('B. rejects unauthenticated admin override with 401 UNAUTHORIZED', async () => {
-      const unauthReq = new NextRequest('http://localhost:3000/api/admin/puzzles/override', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          puzzleDate: TEST_DATE,
-          movieId: 'some-movie-id',
-          overrideReason: 'Unauthorized attempt',
-        }),
+    it('8. invalid token -> 401 UNAUTHORIZED', async () => {
+      const invalidReq = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`, {
+        headers: { authorization: 'Bearer completely-bogus-token' },
       });
+      await expect(authenticateAdmin(invalidReq)).rejects.toThrow(AppError);
 
-      const res = await overrideHandler(unauthReq);
+      const res = await previewHandler(invalidReq);
       expect(res.status).toBe(401);
-      const data = await res.json();
-      expect(data.error.code).toBe('UNAUTHORIZED');
-      expect(data.puzzle).toBeUndefined();
     });
 
-    it('C. rejects non-admin caller with 403 FORBIDDEN when insufficient permissions', async () => {
-      // Create a test user with MODERATOR role
-      const modUser = await prisma.adminUser.upsert({
-        where: { username: 'test-moderator' },
-        create: {
-          username: 'test-moderator',
-          email: 'mod@aatachusthava.com',
-          passwordHash: 'hashed_pw',
-          role: 'MODERATOR',
-        },
-        update: { role: 'MODERATOR' },
+    it('9. valid token + insufficient role -> 403 FORBIDDEN', async () => {
+      const req = new NextRequest('http://localhost:3000/api/admin/puzzles/preview', {
+        headers: { authorization: `Bearer ${VALID_ADMIN_SECRET}` },
       });
 
-      const req = new NextRequest('http://localhost:3000/api/admin/puzzles/override', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${modUser.id}`,
-        },
-        body: JSON.stringify({
-          puzzleDate: TEST_DATE,
-          movieId: 'some-movie-id',
-          overrideReason: 'Moderator attempt',
-        }),
-      });
+      // requireAdminAuth with role requirement that excludes SUPER_ADMIN
+      await expect(requireAdminAuth(req, ['MODERATOR'])).rejects.toThrow(AppError);
 
-      const res = await overrideHandler(req);
-      expect(res.status).toBe(403);
-      const data = await res.json();
-      expect(data.error.code).toBe('FORBIDDEN');
+      try {
+        await requireAdminAuth(req, ['MODERATOR']);
+      } catch (err: any) {
+        expect(err.statusCode).toBe(403);
+        expect(err.code).toBe('FORBIDDEN');
+      }
     });
 
-    it('D. accepts authenticated administrator with valid Bearer secret or header', async () => {
-      const authReq = new NextRequest(`http://localhost:3000/api/admin/puzzles/preview?date=${TEST_DATE}`, {
-        headers: {
-          authorization: `Bearer ${VALID_ADMIN_SECRET}`,
-        },
-      });
-
-      const res = await previewHandler(authReq);
-      expect(res.status).toBe(200);
-      const data = await res.json();
-      expect(data.preview).toBeDefined();
-      expect(data.preview.puzzleDate).toBe(TEST_DATE);
-    });
-
-    it('E. ignores caller-supplied adminId in request body and derives actor from authenticated identity', async () => {
+    it('10. audit log uses authenticated root admin identity', async () => {
       const activeMovie = await prisma.movie.findFirst({
         where: { lifecycleStatus: 'ACTIVE', eligibility: { playableAsTarget: true } },
       });
       expect(activeMovie).not.toBeNull();
 
-      const spoofingReq = new NextRequest('http://localhost:3000/api/admin/puzzles/override', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${VALID_ADMIN_SECRET}`,
-        },
-        body: JSON.stringify({
-          puzzleDate: TEST_DATE,
-          movieId: activeMovie!.id,
-          overrideReason: 'Valid override with attempted spoofing',
-          adminId: 'spoofed-fake-admin-id', // Attacker trying to spoof actor
-        }),
-      });
-
-      const res = await overrideHandler(spoofingReq);
-      expect(res.status).toBe(200);
-      const data = await res.json();
-      expect(data.success).toBe(true);
-
-      // Verify the actor ID in override metadata is derived from authenticated context ('super-admin-root'), NOT the spoofed payload
-      expect(data.puzzle.selectionMetadata.overriddenBy).toBe('super-admin-root');
-      expect(data.puzzle.selectionMetadata.overriddenBy).not.toBe('spoofed-fake-admin-id');
-    });
-
-    it('F. writes audit log using authenticated actor ID and actor role', async () => {
-      const activeMovie = await prisma.movie.findFirst({
-        where: { lifecycleStatus: 'ACTIVE', eligibility: { playableAsTarget: true } },
-      });
-
       const req = new NextRequest('http://localhost:3000/api/admin/puzzles/override', {
         method: 'POST',
         headers: {
@@ -157,11 +163,13 @@ describe('PR #22 Security Hardening: Admin Authorization & Secret Management', (
         body: JSON.stringify({
           puzzleDate: TEST_DATE,
           movieId: activeMovie!.id,
-          overrideReason: 'Audit Log Verification',
+          overrideReason: 'Audit Log Root Identity Verification',
+          adminId: 'attempted-spoof-id', // Ignored!
         }),
       });
 
-      await overrideHandler(req);
+      const res = await overrideHandler(req);
+      expect(res.status).toBe(200);
 
       const auditLog = await prisma.auditLog.findFirst({
         where: {

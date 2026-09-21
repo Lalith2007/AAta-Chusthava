@@ -60,7 +60,21 @@ export class DailyPuzzleSelector {
   }
 
   /**
-   * Evaluates the real database-derived quality profile of a target-eligible movie.
+   * Evaluates the real database-derived quality profile of a target-eligible movie
+   * by evaluating all 11 clues individually against genuine data.
+   *
+   * 11 Clues Evaluated:
+   * 1. Language (supportedLanguages >= 1)
+   * 2. Director (valid person in DIRECTOR role or Director job)
+   * 3. Studio (productionHouses >= 1)
+   * 4. Release Year (releaseYear > 0)
+   * 5. Box Office (positive boxOffice value and valid status)
+   * 6. Rating (positive rating value)
+   * 7. Lead Actor (valid person with LEAD roleType and CAST relationType, >= 1)
+   * 8. Lead Actress / Co-Lead (valid person with LEAD roleType and CAST relationType, >= 2)
+   * 9. Supporting Cast (valid person with SUPPORTING roleType and CAST relationType, >= 1)
+   * 10. Music Director (valid person in MUSIC_DIRECTOR role or Music Director/Composer job)
+   * 11. Genres (genres >= 1)
    */
   public computeTargetQualityProfile(movie: {
     id: string;
@@ -70,6 +84,7 @@ export class DailyPuzzleSelector {
     rating: number | null;
     ratingVoteCount: number | null;
     boxOffice: number | null;
+    boxOfficeStatus?: string | null;
     people: {
       roleType: string;
       relationType: string;
@@ -79,20 +94,59 @@ export class DailyPuzzleSelector {
     productionHouses: { productionHouse: { canonicalName: string } }[];
     genres: { genre: { canonicalName: string } }[];
   }): TargetQualityProfile {
+    // 1. Language
+    const hasLanguage = Array.isArray(movie.supportedLanguages) && movie.supportedLanguages.length > 0;
+
+    // 2. Director
     const validDirectors = movie.people.filter(
       (p) =>
         (p.roleType === 'DIRECTOR' || p.job === 'Director') &&
         isValidPersonName(p.person.canonicalName)
     );
-    const validCast = movie.people.filter(
+    const hasDirector = validDirectors.length > 0;
+
+    // 3. Studio / Production House
+    const hasStudio = Array.isArray(movie.productionHouses) && movie.productionHouses.length > 0;
+
+    // 4. Release Year
+    const hasReleaseYear = typeof movie.releaseYear === 'number' && movie.releaseYear > 0;
+
+    // 5. Box Office
+    const hasBoxOffice =
+      typeof movie.boxOffice === 'number' &&
+      movie.boxOffice > 0 &&
+      movie.boxOfficeStatus !== 'UNKNOWN' &&
+      movie.boxOfficeStatus !== 'UNAVAILABLE';
+
+    // 6. Rating
+    const hasRating =
+      typeof movie.rating === 'number' &&
+      movie.rating > 0 &&
+      (movie.ratingVoteCount == null || movie.ratingVoteCount > 0);
+
+    // 7. Lead Actor (Primary Lead)
+    const validLeadCast = movie.people.filter(
       (p) =>
-        (p.roleType === 'LEAD' || p.roleType === 'SUPPORTING' || p.relationType === 'CAST') &&
+        p.roleType === 'LEAD' &&
+        p.relationType === 'CAST' &&
         isValidPersonName(p.person.canonicalName)
     );
-    const hasSupportingCast = movie.people.some(
-      (p) => p.roleType === 'SUPPORTING' && isValidPersonName(p.person.canonicalName)
+    const hasLeadActor = validLeadCast.length >= 1;
+
+    // 8. Lead Actress / Co-Lead (Secondary Lead)
+    const hasLeadActress = validLeadCast.length >= 2;
+
+    // 9. Supporting Cast
+    const validSupportingCast = movie.people.filter(
+      (p) =>
+        p.roleType === 'SUPPORTING' &&
+        p.relationType === 'CAST' &&
+        isValidPersonName(p.person.canonicalName)
     );
-    const hasMusicDirector = movie.people.some(
+    const hasSupportingCast = validSupportingCast.length > 0;
+
+    // 10. Music Director
+    const validMusicDirectors = movie.people.filter(
       (p) =>
         (p.roleType === 'MUSIC_DIRECTOR' ||
           p.job === 'Music Director' ||
@@ -100,21 +154,38 @@ export class DailyPuzzleSelector {
           p.job === 'Original Music Composer') &&
         isValidPersonName(p.person.canonicalName)
     );
-    const hasStudio = movie.productionHouses.length > 0;
-    const hasRating = !!movie.rating && movie.rating > 0 && (movie.ratingVoteCount || 0) > 0;
-    const hasBoxOffice = !!movie.boxOffice && movie.boxOffice > 0;
-    const hasGenres = movie.genres.length > 0;
+    const hasMusicDirector = validMusicDirectors.length > 0;
 
-    // Core clues: Language(1) + Director(1) + Year(1) + Lead Actor(1) + Lead Actress(1) = 5
-    let availableCluesCount = 5;
+    // 11. Genres
+    const hasGenres = Array.isArray(movie.genres) && movie.genres.length > 0;
+
+    const validCast = movie.people.filter(
+      (p) =>
+        (p.roleType === 'LEAD' || p.roleType === 'SUPPORTING' || p.relationType === 'CAST') &&
+        isValidPersonName(p.person.canonicalName)
+    );
+
+    // Calculate availableCluesCount strictly from genuine data (0 to 11)
+    let availableCluesCount = 0;
+    if (hasLanguage) availableCluesCount++;
+    if (hasDirector) availableCluesCount++;
+    if (hasStudio) availableCluesCount++;
+    if (hasReleaseYear) availableCluesCount++;
+    if (hasBoxOffice) availableCluesCount++;
+    if (hasRating) availableCluesCount++;
+    if (hasLeadActor) availableCluesCount++;
+    if (hasLeadActress) availableCluesCount++;
     if (hasSupportingCast) availableCluesCount++;
     if (hasMusicDirector) availableCluesCount++;
-    if (hasStudio) availableCluesCount++;
-    if (hasRating) availableCluesCount++;
-    if (hasBoxOffice) availableCluesCount++;
     if (hasGenres) availableCluesCount++;
 
-    let qualityScore = 50;
+    // Quality score: base (up to 50 pts) + richness bonus (up to 70 pts) = up to 120 pts
+    let qualityScore = 0;
+    if (hasLanguage) qualityScore += 10;
+    if (hasDirector) qualityScore += 10;
+    if (hasReleaseYear) qualityScore += 10;
+    if (hasLeadActor) qualityScore += 10;
+    if (hasLeadActress) qualityScore += 10;
     if (hasSupportingCast) qualityScore += 15;
     if (hasMusicDirector) qualityScore += 15;
     if (hasStudio) qualityScore += 10;
