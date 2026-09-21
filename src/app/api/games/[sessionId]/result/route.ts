@@ -9,13 +9,14 @@ function generateSpoilerSafeShareText(
   attemptsUsed: number,
   maxAttempts: number,
   isWon: boolean,
-  guesses: any[]
+  guesses: any[],
+  challengeCode?: string | null
 ): string {
   const modeTitle =
     mode === 'DAILY'
       ? 'Daily AAta Chusthava'
       : mode === 'CHALLENGE'
-      ? 'Friend Challenge AAta Chusthava'
+      ? `Friend Challenge ${challengeCode ? `#${challengeCode}` : 'AAta Chusthava'}`
       : 'AAta Chusthava';
 
   const scoreText = isWon ? `${attemptsUsed}/${maxAttempts}` : `X/${maxAttempts}`;
@@ -36,7 +37,11 @@ function generateSpoilerSafeShareText(
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://aatachusthava.com';
-  return `🎬 ${modeTitle} ${scoreText}\n\n${matrix}\nPlay at: ${appUrl}`;
+  const targetUrl =
+    mode === 'CHALLENGE' && challengeCode
+      ? `${appUrl}/challenge/${challengeCode}`
+      : appUrl;
+  return `🎬 ${modeTitle} ${scoreText}\n\n${matrix}\nPlay at: ${targetUrl}`;
 }
 
 export async function GET(
@@ -82,7 +87,8 @@ export async function GET(
       session.attemptsUsed,
       session.game.maxAttempts,
       session.status === 'WON',
-      session.guesses
+      session.guesses,
+      session.game.challenge?.publicCode
     );
 
     return NextResponse.json({
