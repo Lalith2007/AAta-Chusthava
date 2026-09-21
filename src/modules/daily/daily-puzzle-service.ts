@@ -111,6 +111,67 @@ export class DailyPuzzleService {
   }
 
   /**
+   * Resolves an existing, persisted historical Daily Puzzle strictly for Archive replay.
+   * MUST NEVER create a puzzle, invoke DAILY_SELECTION_V1, or mutate the database.
+   */
+  async getExistingHistoricalPuzzleForDate(dateStr: string): Promise<string> {
+    if (!dateStr || !isValidPuzzleDate(dateStr)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Invalid historical puzzle date format: ${dateStr}. Expected YYYY-MM-DD.`,
+        400
+      );
+    }
+
+    const todayIST = getIndianCalendarDate(new Date());
+
+    // Historical dates must be strictly before today's IST date
+    if (dateStr >= todayIST) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Date ${dateStr} is not a past historical date. Daily archive only permits dates prior to today (${todayIST}).`,
+        400
+      );
+    }
+
+    const dailyPuzzle = await prisma.dailyPuzzle.findUnique({
+      where: { puzzleDate: dateStr },
+      include: { game: true },
+    });
+
+    if (!dailyPuzzle) {
+      throw new AppError(
+        'ARCHIVE_NOT_FOUND',
+        `No historical daily puzzle exists for date ${dateStr}.`,
+        404
+      );
+    }
+
+    if (dailyPuzzle.status === 'CANDIDATE') {
+      throw new AppError(
+        'ARCHIVE_NOT_FOUND',
+        `Puzzle for ${dateStr} is not an active or archived historical puzzle.`,
+        404
+      );
+    }
+
+    return dailyPuzzle.gameId;
+  }
+
+  /**
+   * Returns client session state for playing a historical Daily puzzle from the archive.
+   * Uses strictly existing historical DailyPuzzle records without dynamic selection.
+   */
+  async getArchiveSession(
+    dateStr: string,
+    playerIdentifier?: { anonymousPlayerId?: string; playerId?: string }
+  ): Promise<ClientSessionState> {
+    const gameId = await this.getExistingHistoricalPuzzleForDate(dateStr);
+    const session = await gameRepository.getOrCreateSession(gameId, playerIdentifier);
+    return gameEngine.getSessionState(session.id);
+  }
+
+  /**
    * Previews the deterministic target movie and selection metadata for a date (Admin/Internal).
    */
   async previewDailyTarget(dateStr?: string): Promise<DailyPuzzlePreview> {
@@ -414,22 +475,17 @@ export class DailyPuzzleService {
 
   /**
    * Returns historical archive puzzles for public listing.
+   * Only includes puzzles from strictly past calendar dates (prior to today IST).
    */
-  async getArchivePuzzles(limit = 30) {
+  async getArchivePuzzles(limit = 60) {
+    const todayIST = getIndianCalendarDate(new Date());
+
     const puzzles = await prisma.dailyPuzzle.findMany({
       where: {
+        puzzleDate: { lt: todayIST },
         status: { in: ['ACTIVE', 'ARCHIVED'] },
       },
       include: {
-        targetMovie: {
-          select: {
-            id: true,
-            primaryTitle: true,
-            releaseYear: true,
-            posterAsset: true,
-            supportedLanguages: true,
-          },
-        },
         game: {
           include: {
             sessions: true,
