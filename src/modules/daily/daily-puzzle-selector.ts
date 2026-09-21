@@ -70,8 +70,8 @@ export class DailyPuzzleSelector {
    * 4. Release Year (releaseYear > 0)
    * 5. Box Office (positive boxOffice value and valid status)
    * 6. Rating (positive rating value)
-   * 7. Lead Actor (valid person with LEAD roleType and CAST relationType, >= 1)
-   * 8. Lead Actress / Co-Lead (valid person with LEAD roleType and CAST relationType, >= 2)
+   * 7. Primary Lead (valid person with LEAD roleType and CAST relationType, >= 1)
+   * 8. Secondary Lead / Co-Lead (valid person with LEAD roleType and CAST relationType, >= 2; backs LEAD_ACTRESS clue evaluator proxy)
    * 9. Supporting Cast (valid person with SUPPORTING roleType and CAST relationType, >= 1)
    * 10. Music Director (valid person in MUSIC_DIRECTOR role or Music Director/Composer job)
    * 11. Genres (genres >= 1)
@@ -124,7 +124,7 @@ export class DailyPuzzleSelector {
       movie.rating > 0 &&
       (movie.ratingVoteCount == null || movie.ratingVoteCount > 0);
 
-    // 7. Lead Actor (Primary Lead)
+    // 7. Primary Lead Cast
     const validLeadCast = movie.people.filter(
       (p) =>
         p.roleType === 'LEAD' &&
@@ -132,11 +132,9 @@ export class DailyPuzzleSelector {
         isValidPersonName(p.person.canonicalName)
     );
     const hasPrimaryLead = validLeadCast.length >= 1;
-    const hasLeadActor = hasPrimaryLead;
 
-    // 8. Secondary Lead / Co-Lead (backs LEAD_ACTRESS clue evaluator proxy)
+    // 8. Secondary Lead / Co-Lead (backs the application's secondary lead clue proxy)
     const hasSecondaryLead = validLeadCast.length >= 2;
-    const hasLeadActress = hasSecondaryLead;
 
     // 9. Supporting Cast
     const validSupportingCast = movie.people.filter(
@@ -175,8 +173,8 @@ export class DailyPuzzleSelector {
     if (hasReleaseYear) availableCluesCount++;
     if (hasBoxOffice) availableCluesCount++;
     if (hasRating) availableCluesCount++;
-    if (hasLeadActor) availableCluesCount++;
-    if (hasLeadActress) availableCluesCount++;
+    if (hasPrimaryLead) availableCluesCount++;
+    if (hasSecondaryLead) availableCluesCount++;
     if (hasSupportingCast) availableCluesCount++;
     if (hasMusicDirector) availableCluesCount++;
     if (hasGenres) availableCluesCount++;
@@ -186,8 +184,8 @@ export class DailyPuzzleSelector {
     if (hasLanguage) qualityScore += 10;
     if (hasDirector) qualityScore += 10;
     if (hasReleaseYear) qualityScore += 10;
-    if (hasLeadActor) qualityScore += 10;
-    if (hasLeadActress) qualityScore += 10;
+    if (hasPrimaryLead) qualityScore += 10;
+    if (hasSecondaryLead) qualityScore += 10;
     if (hasSupportingCast) qualityScore += 15;
     if (hasMusicDirector) qualityScore += 15;
     if (hasStudio) qualityScore += 10;
