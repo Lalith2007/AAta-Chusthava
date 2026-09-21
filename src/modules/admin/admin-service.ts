@@ -3,6 +3,7 @@ import { queueService } from '@/infrastructure/queue/queue-service';
 import { ingestionService } from '@/modules/ingestion/ingestion-service';
 import { dailyPuzzleService } from '@/modules/daily/daily-puzzle-service';
 import { movieRepository } from '@/modules/movies/movie-repository';
+import { getIndianCalendarDate } from '@/lib/date-utils';
 import { AppError } from '@/domain/errors';
 
 export class AdminService {
@@ -159,7 +160,7 @@ export class AdminService {
   }
 
   async getScheduledPuzzles(limit = 14) {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getIndianCalendarDate(new Date());
     return prisma.dailyPuzzle.findMany({
       where: {
         puzzleDate: { gte: todayStr },
@@ -249,7 +250,7 @@ export class AdminService {
 
     const upcomingPuzzlesCount = await prisma.dailyPuzzle.count({
       where: {
-        puzzleDate: { gte: new Date().toISOString().split('T')[0] },
+        puzzleDate: { gte: getIndianCalendarDate(new Date()) },
       },
     });
 

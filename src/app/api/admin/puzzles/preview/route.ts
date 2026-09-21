@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminService } from '@/modules/admin/admin-service';
 import { dailyPuzzleService } from '@/modules/daily/daily-puzzle-service';
 import { formatErrorResponse } from '@/domain/errors';
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const scheduled = await dailyPuzzleService.getScheduledPuzzles();
-    return NextResponse.json({ scheduled });
+    const { searchParams } = new URL(req.url);
+    const dateParam = searchParams.get('date') || undefined;
+    const preview = await dailyPuzzleService.previewDailyTarget(dateParam);
+    return NextResponse.json({ preview });
   } catch (err: unknown) {
     const { error, status } = formatErrorResponse(err);
     return NextResponse.json({ error }, { status });
