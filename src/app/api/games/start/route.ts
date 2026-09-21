@@ -19,8 +19,13 @@ export async function POST(req: NextRequest) {
 
     let sessionState;
 
-    if (parsed.mode === 'DAILY' || parsed.mode === 'ARCHIVE') {
+    if (parsed.mode === 'DAILY') {
       sessionState = await dailyPuzzleService.getDailySession(parsed.date, player);
+    } else if (parsed.mode === 'ARCHIVE') {
+      if (!parsed.date) {
+        throw new AppError('VALIDATION_ERROR', 'Date is required for archive mode.', 400);
+      }
+      sessionState = await dailyPuzzleService.getArchiveSession(parsed.date, player);
     } else if (parsed.mode === 'CHALLENGE') {
       if (!parsed.publicCode) {
         throw new AppError('VALIDATION_ERROR', 'Challenge code is required for challenge mode.', 400);
