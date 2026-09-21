@@ -1457,7 +1457,7 @@ export class IngestionService {
     const startYear = options.startYear || 2002;
     const currentYear = new Date().getFullYear();
     const endYear = options.endYear || (currentYear >= 2026 ? currentYear : 2026);
-    const sources = options.sources && options.sources.length > 0 ? options.sources : ['TMDB', 'WIKIDATA'];
+    const sources = options.sources && options.sources.length > 0 ? options.sources : ['TMDB', 'WIKIDATA', 'WIKIPEDIA'];
     const languages: Array<'te' | 'hi'> = options.languages && options.languages.length > 0 ? options.languages : ['te', 'hi'];
     const resume = options.resume !== false;
 
@@ -1529,7 +1529,7 @@ export class IngestionService {
                 let res = { discovered: 0, totalPages: 1 };
                 if (srcUpper === 'TMDB') {
                   res = await this.discoverYear(lang, year, page);
-                } else if (srcUpper === 'WIKIDATA') {
+                } else {
                   res = await this.discoverSecondaryYear(srcUpper, lang, year, page);
                 }
 

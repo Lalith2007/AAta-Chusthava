@@ -5,11 +5,11 @@ import { prisma } from '@/infrastructure/db/client';
 
 describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
   beforeAll(async () => {
-    // Run historical catalog expansion before tests
+    // Run historical catalog expansion across all 3 active sources
     await ingestionService.runHistoricalCatalogExpansion({
       startYear: 2002,
       endYear: 2026,
-      sources: ['TMDB', 'WIKIDATA'],
+      sources: ['TMDB', 'WIKIDATA', 'WIKIPEDIA'],
       languages: ['te', 'hi'],
       resume: true,
     });
@@ -18,7 +18,7 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
   it('1. Executes batch historical expansion and tracks candidate accounting', async () => {
     const report = await catalogCoverageService.getCoverageReport();
 
-    expect(report.totals.totalMovies).toBeGreaterThanOrEqual(90);
+    expect(report.totals.totalMovies).toBeGreaterThanOrEqual(134);
     expect(report.totals.activeMovies).toBe(report.totals.totalMovies);
     expect(report.totals.playableAsGuess).toBe(report.totals.totalMovies);
     expect(report.totals.playableAsTarget).toBe(report.totals.totalMovies);
@@ -27,22 +27,24 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
   it('2. Records persistent DiscoveryCheckpoint entries across years, sources, and languages', async () => {
     const checkpoints = await prisma.discoveryCheckpoint.findMany();
 
-    expect(checkpoints.length).toBeGreaterThan(0);
+    expect(checkpoints.length).toBeGreaterThanOrEqual(150);
     const completedCheckpoints = checkpoints.filter((c) => c.status === 'COMPLETED');
     expect(completedCheckpoints.length).toBe(checkpoints.length);
 
-    // Verify checkpoints contain both TMDB and WIKIDATA
+    // Verify checkpoints contain TMDB, WIKIDATA, and WIKIPEDIA
     const tmdbCheckpoints = checkpoints.filter((c) => c.source === 'TMDB');
     const wikidataCheckpoints = checkpoints.filter((c) => c.source === 'WIKIDATA');
-    expect(tmdbCheckpoints.length).toBeGreaterThan(0);
-    expect(wikidataCheckpoints.length).toBeGreaterThan(0);
+    const wikipediaCheckpoints = checkpoints.filter((c) => c.source === 'WIKIPEDIA');
+    expect(tmdbCheckpoints.length).toBe(50);
+    expect(wikidataCheckpoints.length).toBe(50);
+    expect(wikipediaCheckpoints.length).toBe(50);
   });
 
   it('3. Supports resumable expansion without duplication or errors', async () => {
     const result = await ingestionService.runHistoricalCatalogExpansion({
       startYear: 2002,
       endYear: 2005,
-      sources: ['TMDB', 'WIKIDATA'],
+      sources: ['TMDB', 'WIKIDATA', 'WIKIPEDIA'],
       languages: ['te', 'hi'],
       resume: true,
     });
@@ -66,17 +68,17 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     expect(pushpa?.eligibility?.playableAsGuess).toBe(true);
     expect(pushpa?.eligibility?.playableAsTarget).toBe(true);
 
-    const kalki = await prisma.movie.findFirst({
+    const devdas = await prisma.movie.findFirst({
       where: {
-        primaryTitle: { contains: 'Kalki', mode: 'insensitive' },
+        primaryTitle: { contains: 'Devdas', mode: 'insensitive' },
         lifecycleStatus: 'ACTIVE',
       },
       include: { eligibility: true },
     });
 
-    expect(kalki).toBeDefined();
-    expect(kalki?.releaseYear).toBe(2024);
-    expect(kalki?.eligibility?.playableAsTarget).toBe(true);
+    expect(devdas).toBeDefined();
+    expect(devdas?.releaseYear).toBe(2002);
+    expect(devdas?.eligibility?.playableAsTarget).toBe(true);
   });
 
   it('5. Guarantees 100% strict mathematical reconciliation across all language and year totals', async () => {
@@ -134,24 +136,28 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     const ep = report.expansionProgress;
 
     expect(ep.previousCanonicalCount).toBe(90);
-    expect(ep.currentCanonicalCount).toBeGreaterThanOrEqual(100);
-    expect(ep.newCanonicalContributed).toBeGreaterThanOrEqual(10);
+    expect(ep.currentCanonicalCount).toBeGreaterThanOrEqual(134);
+    expect(ep.newCanonicalContributed).toBeGreaterThanOrEqual(44);
     expect(ep.previousCanonicalCount + ep.newCanonicalContributed).toBe(ep.currentCanonicalCount);
   });
 
-  it('8. Verifies 100 discovery checkpoints (2 sources x 2 languages x 25 years)', async () => {
+  it('8. Verifies 150 discovery checkpoints (3 sources x 2 languages x 25 years)', async () => {
     const checkpoints = await prisma.discoveryCheckpoint.findMany();
-    expect(checkpoints.length).toBe(100);
+    expect(checkpoints.length).toBe(150);
 
     const tmdbTe = checkpoints.filter((c) => c.source === 'TMDB' && c.language === 'te');
     const tmdbHi = checkpoints.filter((c) => c.source === 'TMDB' && c.language === 'hi');
     const wikiTe = checkpoints.filter((c) => c.source === 'WIKIDATA' && c.language === 'te');
     const wikiHi = checkpoints.filter((c) => c.source === 'WIKIDATA' && c.language === 'hi');
+    const wpTe = checkpoints.filter((c) => c.source === 'WIKIPEDIA' && c.language === 'te');
+    const wpHi = checkpoints.filter((c) => c.source === 'WIKIPEDIA' && c.language === 'hi');
 
     expect(tmdbTe.length).toBe(25);
     expect(tmdbHi.length).toBe(25);
     expect(wikiTe.length).toBe(25);
     expect(wikiHi.length).toBe(25);
+    expect(wpTe.length).toBe(25);
+    expect(wpHi.length).toBe(25);
   });
 
   it('9. Preserves honest PARTIAL coverage status after batch expansion', async () => {
@@ -165,7 +171,7 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
       where: { status: 'COMPLETED' },
     });
 
-    expect(checkpoints.length).toBeGreaterThanOrEqual(100);
+    expect(checkpoints.length).toBe(150);
     for (const cp of checkpoints) {
       expect(cp.page).toBeGreaterThanOrEqual(1);
       expect(cp.totalPages).toBeGreaterThanOrEqual(1);
@@ -191,7 +197,7 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
       include: { eligibility: true },
     });
 
-    expect(movies.length).toBeGreaterThanOrEqual(100);
+    expect(movies.length).toBeGreaterThanOrEqual(134);
     for (const m of movies) {
       expect(m.eligibility).toBeDefined();
       expect(m.eligibility?.playableAsGuess).toBe(true);
@@ -227,5 +233,17 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
       wiki!.accepted + (wiki!.priorProcessed || 0) + wiki!.duplicates + wiki!.review + wiki!.rejected;
     expect(outcomeSum).toBe(wiki!.candidatesDiscovered);
     expect(wiki!.candidateOutcomeReconciled).toBe(true);
+  });
+
+  it('16. Reconciles candidate-level outcome arithmetic for Wikipedia (accepted + prior + duplicate + review + rejected = discovered)', async () => {
+    const report = await catalogCoverageService.getCoverageReport();
+    const wp = report.sourceBreakdown.find((s) => s.code === 'WIKIPEDIA');
+
+    expect(wp).toBeDefined();
+    expect(wp!.candidatesDiscovered).toBeGreaterThan(0);
+    const outcomeSum =
+      wp!.accepted + (wp!.priorProcessed || 0) + wp!.duplicates + wp!.review + wp!.rejected;
+    expect(outcomeSum).toBe(wp!.candidatesDiscovered);
+    expect(wp!.candidateOutcomeReconciled).toBe(true);
   });
 });

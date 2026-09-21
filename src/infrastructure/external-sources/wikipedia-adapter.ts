@@ -82,8 +82,20 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
     };
   }
 
+  private async ensureRecordInCache(sourceMovieId: string): Promise<WikipediaFilmRecord | undefined> {
+    let rec = this.cache.get(sourceMovieId);
+    if (rec) return rec;
+
+    const yearMatch = sourceMovieId.match(/_(\d{4})_/);
+    const year = yearMatch ? parseInt(yearMatch[1], 10) : 2024;
+    const lang = sourceMovieId.includes('_TE_') ? 'te' : 'hi';
+
+    await this.fetchYearFilmography(lang, year);
+    return this.cache.get(sourceMovieId);
+  }
+
   async getCandidateIdentity(sourceMovieId: string): Promise<CandidateIdentity> {
-    const rec = this.cache.get(sourceMovieId);
+    const rec = await this.ensureRecordInCache(sourceMovieId);
     if (!rec) {
       const yearMatch = sourceMovieId.match(/_(\d{4})_/);
       const parsedYear = yearMatch ? parseInt(yearMatch[1], 10) : 2024;
@@ -109,7 +121,7 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
   }
 
   async getMetadata(sourceMovieId: string): Promise<MovieSourceMetadata> {
-    const rec = this.cache.get(sourceMovieId);
+    const rec = await this.ensureRecordInCache(sourceMovieId);
     return {
       overview: rec
         ? `Wikipedia listed entry for ${rec.title} (${rec.releaseYear}). Attribution: ${rec.attribution}`
@@ -121,7 +133,7 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
   }
 
   async getCredits(sourceMovieId: string): Promise<MovieSourceCredits> {
-    const rec = this.cache.get(sourceMovieId);
+    const rec = await this.ensureRecordInCache(sourceMovieId);
     const directors = (rec?.directors || ['Director']).map((name) => ({ name }));
     const cast = (rec?.cast || ['Lead Actor', 'Supporting Actor']).map((name, idx) => ({
       name,
@@ -139,7 +151,7 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
   }
 
   async getReleaseData(sourceMovieId: string): Promise<MovieReleaseData> {
-    const rec = this.cache.get(sourceMovieId);
+    const rec = await this.ensureRecordInCache(sourceMovieId);
     return {
       releaseDate: rec?.releaseDate || `${rec?.releaseYear || 2024}-01-01`,
       countries: ['IN'],

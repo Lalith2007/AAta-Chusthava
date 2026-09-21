@@ -159,7 +159,7 @@ describe('Secondary Movie Discovery Source (Wikidata / Open Knowledge Graph)', (
     });
 
     expect(searchResults.length).toBeGreaterThan(0);
-    expect(searchResults[0].primaryTitle).toBe('Aithe');
+    expect(searchResults.some((m) => m.primaryTitle === 'Aithe')).toBe(true);
   });
 
   it('6. Coverage service computes multi-source comparison and verifies all mathematical invariants', async () => {

@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const result = await ingestionService.runHistoricalCatalogExpansion({
       startYear: startYear ? parseInt(startYear, 10) : 2002,
       endYear: endYear ? parseInt(endYear, 10) : 2026,
-      sources: Array.isArray(sources) ? sources : ['TMDB', 'WIKIDATA'],
+      sources: Array.isArray(sources) ? sources : ['TMDB', 'WIKIDATA', 'WIKIPEDIA'],
       languages: Array.isArray(languages) ? languages : ['te', 'hi'],
       resume: resume !== undefined ? Boolean(resume) : true,
     });

@@ -107,7 +107,7 @@ export default function AdminCatalogPage() {
         body: JSON.stringify({
           startYear: 2002,
           endYear: 2026,
-          sources: ['TMDB', 'WIKIDATA'],
+          sources: ['TMDB', 'WIKIDATA', 'WIKIPEDIA'],
           languages: ['te', 'hi'],
           resume: true,
         }),
