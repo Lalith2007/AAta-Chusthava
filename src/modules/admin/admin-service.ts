@@ -253,6 +253,16 @@ export class AdminService {
       },
     });
 
+    const tmdbEnrichedCount = await prisma.movie.count({
+      where: { tmdbId: { not: null } },
+    });
+    const wikidataEnrichedCount = await prisma.movie.count({
+      where: { wikidataId: { not: null } },
+    });
+    const bothEnrichedCount = await prisma.movie.count({
+      where: { tmdbId: { not: null }, wikidataId: { not: null } },
+    });
+
     return {
       totalMovies,
       activeMovies,
@@ -265,6 +275,9 @@ export class AdminService {
       approvedCount,
       rejectedCount,
       disabledCount,
+      tmdbEnrichedCount,
+      wikidataEnrichedCount,
+      bothEnrichedCount,
       coverageStatus: 'PARTIAL (Baseline 2002–2026 Ingested)',
       gamesPlayed,
       gamesWon,

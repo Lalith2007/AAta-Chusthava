@@ -68,6 +68,16 @@ export interface ExpansionProgressReport {
   totalCheckpointsCompleted: number;
 }
 
+export interface EnrichmentStatsReport {
+  tmdbEnriched: number;
+  wikidataEnriched: number;
+  bothEnriched: number;
+  neitherEnriched: number;
+  targetPlayable: number;
+  needsReview: number;
+  guessPlayable: number;
+}
+
 export interface CatalogCoverageReport {
   totals: {
     totalMovies: number;
@@ -87,6 +97,7 @@ export interface CatalogCoverageReport {
   sourceBreakdown: SourceCoverageItem[];
   sourceComparison: SourceComparisonReport;
   expansionProgress: ExpansionProgressReport;
+  enrichmentStats?: EnrichmentStatsReport;
   coverageStatus: CoverageStatus;
   coverageStatusDescription: string;
   auditMetadata: {
@@ -478,6 +489,15 @@ export class CatalogCoverageService {
       sourceBreakdown,
       sourceComparison,
       expansionProgress,
+      enrichmentStats: {
+        tmdbEnriched: tmdbCanonicalCount,
+        wikidataEnriched: wikidataCanonicalCount,
+        bothEnriched: bothSourcesCanonical,
+        neitherEnriched: neitherSourceCanonical,
+        targetPlayable: playableAsTarget,
+        needsReview,
+        guessPlayable: playableAsGuess,
+      },
       coverageStatus: 'PARTIAL',
       coverageStatusDescription:
         'Catalog actively enriched by primary (TMDB) and secondary (Wikidata Open Knowledge Graph) discovery sources across 2002–2026. Continuous multi-source expansion pipeline ready for progressive discovery.',
