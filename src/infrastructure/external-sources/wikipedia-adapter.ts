@@ -24,12 +24,56 @@ export interface WikipediaFilmRecord {
   attribution: string;
 }
 
+export function isValidPersonName(name: string | null | undefined): boolean {
+  if (!name || typeof name !== 'string') return false;
+  const clean = name.trim();
+  if (clean.length < 2) return false;
+
+  const lower = clean.toLowerCase();
+  const disallowed = new Set([
+    'director',
+    'directors',
+    'lead actor',
+    'lead actress',
+    'supporting actor',
+    'supporting actress',
+    'actor',
+    'actress',
+    'actors',
+    'cast',
+    'main cast',
+    'supporting cast',
+    'music director',
+    'producer',
+    'producers',
+    'unknown',
+    'tba',
+    'tbd',
+    'n/a',
+    'na',
+    'none',
+    'various',
+    'uncredited',
+    'self',
+    'special appearance',
+    'cameo',
+    'guest appearance',
+  ]);
+
+  if (disallowed.has(lower)) return false;
+  if (lower.startsWith('style=') || lower.startsWith('class=') || lower.startsWith('align=')) return false;
+  if (lower.includes('wikitable') || lower.includes('rowspan=') || lower.includes('colspan=')) return false;
+
+  return true;
+}
+
 export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
   readonly sourceName = 'WIKIPEDIA';
   readonly isImplemented = true;
   readonly status: DiscoverySourceStatus = 'ACTIVE';
 
   private cache: Map<string, WikipediaFilmRecord> = new Map();
+  private yearCache: Map<string, WikipediaFilmRecord[]> = new Map();
 
   constructor() {
     this.seedBaselineCache();
@@ -68,7 +112,7 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
       sourceMovieId: rec.id,
       title: rec.title,
       originalTitle: rec.originalTitle || rec.title,
-      releaseDate: rec.releaseDate || `${rec.releaseYear}-01-01`,
+      releaseDate: rec.releaseDate,
       originalLanguage: rec.language,
       popularity: 50,
       voteAverage: 7.0,
@@ -114,21 +158,27 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
       overview: rec
         ? `Wikipedia listed entry for ${rec.title} (${rec.releaseYear}). Attribution: ${rec.attribution}`
         : 'Wikipedia film entry.',
-      runtime: 135,
-      genres: [{ name: 'Drama' }],
+      runtime: undefined,
+      genres: [],
       productionCompanies: rec?.productionHouse ? [{ name: rec.productionHouse }] : [],
     };
   }
 
   async getCredits(sourceMovieId: string): Promise<MovieSourceCredits> {
     const rec = this.cache.get(sourceMovieId);
-    const directors = (rec?.directors || ['Director']).map((name) => ({ name }));
-    const cast = (rec?.cast || ['Lead Actor', 'Supporting Actor']).map((name, idx) => ({
-      name,
-      order: idx,
-      character: idx < 2 ? 'Lead' : 'Supporting',
-    }));
-    const musicDirectors = (rec?.musicDirectors || []).map((name) => ({ name }));
+    const directors = (rec?.directors || [])
+      .filter((name) => isValidPersonName(name))
+      .map((name) => ({ name }));
+    const cast = (rec?.cast || [])
+      .filter((name) => isValidPersonName(name))
+      .map((name, idx) => ({
+        name,
+        order: idx,
+        character: idx < 2 ? 'Lead' : 'Supporting',
+      }));
+    const musicDirectors = (rec?.musicDirectors || [])
+      .filter((name) => isValidPersonName(name))
+      .map((name) => ({ name }));
 
     return {
       directors,
@@ -141,7 +191,7 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
   async getReleaseData(sourceMovieId: string): Promise<MovieReleaseData> {
     const rec = this.cache.get(sourceMovieId);
     return {
-      releaseDate: rec?.releaseDate || `${rec?.releaseYear || 2024}-01-01`,
+      releaseDate: rec?.releaseDate,
       countries: ['IN'],
       alternativeTitles: rec?.originalTitle && rec.originalTitle !== rec.title ? [rec.originalTitle] : [],
     };
@@ -278,15 +328,18 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
             !slug.includes('highest-grossing') &&
             !slug.includes('box-office')
           ) {
+            const validDirectors = foundDirector && isValidPersonName(foundDirector) ? [foundDirector] : [];
+            const validCast = foundCast.filter((c) => isValidPersonName(c));
+
             records.push({
               id: `WIKI_${lang.toUpperCase()}_${year}_${slug}`,
               title: foundTitle,
               originalTitle: foundTitle,
               language: lang,
               releaseYear: year,
-              releaseDate: `${year}-06-15`,
-              directors: foundDirector ? [foundDirector] : ['Director'],
-              cast: foundCast.length >= 2 ? foundCast : ['Lead Actor', 'Supporting Actor'],
+              releaseDate: undefined,
+              directors: validDirectors,
+              cast: validCast,
               sourceArticleUrl,
               attribution,
             });
@@ -311,6 +364,11 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
     lang: 'te' | 'hi',
     year: number
   ): Promise<WikipediaFilmRecord[]> {
+    const cacheKey = `${lang}_${year}`;
+    if (this.yearCache.has(cacheKey)) {
+      return this.yearCache.get(cacheKey)!;
+    }
+
     const pageTitle =
       lang === 'te' ? `List_of_Telugu_films_of_${year}` : `List_of_Hindi_films_of_${year}`;
     const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${pageTitle}&prop=wikitext&format=json`;
@@ -345,12 +403,15 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
       for (const rec of extracted) {
         this.cache.set(rec.id, rec);
       }
+      this.yearCache.set(cacheKey, extracted);
       return extracted;
     } catch (e: unknown) {
       console.warn(`Network fallback for Wikipedia ${pageTitle}:`, e instanceof Error ? e.message : String(e));
-      return Array.from(this.cache.values()).filter(
+      const fallback = Array.from(this.cache.values()).filter(
         (m) => m.language === lang && m.releaseYear === year
       );
+      this.yearCache.set(cacheKey, fallback);
+      return fallback;
     }
   }
 

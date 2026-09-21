@@ -1,7 +1,7 @@
 import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter, MovieDataSource, TmdbMovieDetails, TmdbCredits } from '@/infrastructure/external-sources/tmdb-adapter';
 import { wikidataDiscoveryAdapter, WikidataMovieRecord } from '@/infrastructure/external-sources/wikidata-adapter';
-import { wikipediaDiscoveryAdapter } from '@/infrastructure/external-sources/wikipedia-adapter';
+import { wikipediaDiscoveryAdapter, isValidPersonName } from '@/infrastructure/external-sources/wikipedia-adapter';
 import { DiscoverySourceRegistry } from '@/infrastructure/external-sources/discovery-source';
 import { MovieLanguage, MovieIndustry, RoleType, RelationType, ProductionHouseRole } from '@/domain/movie/types';
 import { queueService } from '@/infrastructure/queue/queue-service';
@@ -1180,7 +1180,9 @@ export class IngestionService {
     }
 
     // New Canonical Movie
-    const isTargetPlayable = credits.directors.length > 0 && credits.cast.length >= 2;
+    const validDirectors = (credits.directors || []).filter((d) => isValidPersonName(d.name));
+    const validCast = (credits.cast || []).filter((c) => isValidPersonName(c.name));
+    const isTargetPlayable = validDirectors.length > 0 && validCast.length >= 2 && !!releaseYear;
 
     const movie = await prisma.movie.create({
       data: {
@@ -1200,7 +1202,8 @@ export class IngestionService {
     });
 
     // Create Genres
-    for (const g of metadata.genres) {
+    for (const g of metadata.genres || []) {
+      if (!g.name) continue;
       const gSlug = g.name.toLowerCase().replace(/[^\w]/g, '-');
       let genreRecord = await prisma.genre.findUnique({ where: { slug: gSlug } });
       if (!genreRecord) {
@@ -1227,7 +1230,7 @@ export class IngestionService {
     }
 
     // Create Directors
-    for (const d of credits.directors) {
+    for (const d of validDirectors) {
       let person = await prisma.person.findFirst({
         where: { canonicalName: { equals: d.name, mode: 'insensitive' } },
       });
@@ -1260,8 +1263,8 @@ export class IngestionService {
     }
 
     // Create Cast
-    for (let i = 0; i < credits.cast.length; i++) {
-      const c = credits.cast[i];
+    for (let i = 0; i < validCast.length; i++) {
+      const c = validCast[i];
       let person = await prisma.person.findFirst({
         where: { canonicalName: { equals: c.name, mode: 'insensitive' } },
       });
@@ -1287,7 +1290,7 @@ export class IngestionService {
           personId: person.id,
           roleType,
           relationType: 'CAST',
-          characterName: c.character || 'Lead',
+          characterName: c.character || (i < 2 ? 'Lead' : 'Supporting'),
           billingOrder: c.order ?? i,
         },
         update: {
@@ -1296,9 +1299,17 @@ export class IngestionService {
       });
     }
 
-    await prisma.gameEligibility.create({
-      data: {
+    await prisma.gameEligibility.upsert({
+      where: { movieId: movie.id },
+      create: {
         movieId: movie.id,
+        playableAsGuess: true,
+        playableAsTarget: isTargetPlayable,
+        minimumMetadataComplete: isTargetPlayable,
+        reviewStatus: isTargetPlayable ? 'APPROVED' : 'PENDING',
+        updatedAt: new Date(),
+      },
+      update: {
         playableAsGuess: true,
         playableAsTarget: isTargetPlayable,
         minimumMetadataComplete: isTargetPlayable,
@@ -1529,7 +1540,7 @@ export class IngestionService {
                 let res = { discovered: 0, totalPages: 1 };
                 if (srcUpper === 'TMDB') {
                   res = await this.discoverYear(lang, year, page);
-                } else if (srcUpper === 'WIKIDATA') {
+                } else if (srcUpper === 'WIKIDATA' || srcUpper === 'WIKIPEDIA') {
                   res = await this.discoverSecondaryYear(srcUpper, lang, year, page);
                 }
 
