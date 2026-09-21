@@ -73,6 +73,7 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
   readonly status: DiscoverySourceStatus = 'ACTIVE';
 
   private cache: Map<string, WikipediaFilmRecord> = new Map();
+  private yearCache: Map<string, WikipediaFilmRecord[]> = new Map();
 
   constructor() {
     this.seedBaselineCache();
@@ -363,6 +364,11 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
     lang: 'te' | 'hi',
     year: number
   ): Promise<WikipediaFilmRecord[]> {
+    const cacheKey = `${lang}_${year}`;
+    if (this.yearCache.has(cacheKey)) {
+      return this.yearCache.get(cacheKey)!;
+    }
+
     const pageTitle =
       lang === 'te' ? `List_of_Telugu_films_of_${year}` : `List_of_Hindi_films_of_${year}`;
     const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${pageTitle}&prop=wikitext&format=json`;
@@ -397,12 +403,15 @@ export class WikipediaDiscoveryAdapter implements MovieDiscoverySource {
       for (const rec of extracted) {
         this.cache.set(rec.id, rec);
       }
+      this.yearCache.set(cacheKey, extracted);
       return extracted;
     } catch (e: unknown) {
       console.warn(`Network fallback for Wikipedia ${pageTitle}:`, e instanceof Error ? e.message : String(e));
-      return Array.from(this.cache.values()).filter(
+      const fallback = Array.from(this.cache.values()).filter(
         (m) => m.language === lang && m.releaseYear === year
       );
+      this.yearCache.set(cacheKey, fallback);
+      return fallback;
     }
   }
 
