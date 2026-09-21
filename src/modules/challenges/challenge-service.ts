@@ -29,6 +29,14 @@ export class ChallengeService {
       throw new AppError('MOVIE_NOT_FOUND', 'Target movie not found.', 404);
     }
 
+    if (movie.lifecycleStatus !== 'ACTIVE') {
+      throw new AppError(
+        'MOVIE_NOT_PLAYABLE',
+        'This movie is not active in the catalog.',
+        400
+      );
+    }
+
     if (!movie.playableAsTarget) {
       throw new AppError(
         'MOVIE_NOT_PLAYABLE',
@@ -47,21 +55,38 @@ export class ChallengeService {
       maxAttempts: defaultRuleset.maxAttempts,
     });
 
-    const publicCode = generatePublicCode();
     const expiresAt = expiresInDays
       ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
       : null;
 
-    const challenge = await prisma.challenge.create({
-      data: {
-        gameId: game.id,
-        publicCode,
-        targetMovieId: movie.id,
-        creator: creatorName || 'A Cinephile Friend',
-        status: 'ACTIVE',
-        expiresAt,
-      },
-    });
+    let challenge: any = null;
+    const maxRetries = 5;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const publicCode = generatePublicCode();
+      try {
+        challenge = await prisma.challenge.create({
+          data: {
+            gameId: game.id,
+            publicCode,
+            targetMovieId: movie.id,
+            creator: creatorName?.trim() || 'A Cinephile Friend',
+            status: 'ACTIVE',
+            expiresAt,
+          },
+        });
+        break;
+      } catch (err: any) {
+        if (err.code === 'P2002' && attempt < maxRetries - 1) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!challenge) {
+      throw new AppError('INTERNAL_ERROR', 'Failed to generate unique challenge code.', 500);
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -79,8 +104,13 @@ export class ChallengeService {
     publicCode: string,
     playerIdentifier?: { anonymousPlayerId?: string; playerId?: string }
   ): Promise<ClientSessionState> {
+    const cleanCode = (publicCode || '').trim().toUpperCase();
+    if (!cleanCode) {
+      throw new AppError('VALIDATION_ERROR', 'Challenge code is required.', 400);
+    }
+
     const challenge = await prisma.challenge.findUnique({
-      where: { publicCode: publicCode.toUpperCase() },
+      where: { publicCode: cleanCode },
       include: { game: true },
     });
 
@@ -92,7 +122,10 @@ export class ChallengeService {
       throw new AppError('CHALLENGE_DISABLED', 'This challenge has been disabled.', 400);
     }
 
-    if (challenge.expiresAt && new Date() > challenge.expiresAt) {
+    if (
+      challenge.status === 'EXPIRED' ||
+      (challenge.expiresAt && new Date() > challenge.expiresAt)
+    ) {
       throw new AppError('CHALLENGE_EXPIRED', 'This challenge link has expired.', 400);
     }
 
@@ -106,8 +139,13 @@ export class ChallengeService {
   }
 
   async getChallengeMeta(publicCode: string) {
+    const cleanCode = (publicCode || '').trim().toUpperCase();
+    if (!cleanCode) {
+      throw new AppError('VALIDATION_ERROR', 'Challenge code is required.', 400);
+    }
+
     const challenge = await prisma.challenge.findUnique({
-      where: { publicCode: publicCode.toUpperCase() },
+      where: { publicCode: cleanCode },
       include: {
         game: {
           include: {
