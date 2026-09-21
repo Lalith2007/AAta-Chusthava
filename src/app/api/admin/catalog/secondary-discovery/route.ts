@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ingestionService } from '@/modules/ingestion/ingestion-service';
 import { catalogCoverageService } from '@/modules/catalog/catalog-coverage-service';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
+import { formatErrorResponse } from '@/domain/errors';
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAdminAuth(req, ['SUPER_ADMIN', 'EDITOR']);
     const body = await req.json().catch(() => ({}));
     const source = (body.source || 'WIKIDATA').toUpperCase();
     const startYear = body.startYear ? Number(body.startYear) : 2002;
@@ -24,9 +27,9 @@ export async function POST(req: NextRequest) {
         coverageReport: updatedReport,
       },
     });
-  } catch (error: unknown) {
-    console.error('Secondary discovery API error:', error);
-    const message = error instanceof Error ? error.message : 'Failed to run secondary discovery';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch (err: unknown) {
+    const { error, status } = formatErrorResponse(err);
+    return NextResponse.json({ error }, { status });
   }
 }
+

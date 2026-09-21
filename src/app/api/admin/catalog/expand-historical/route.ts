@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ingestionService } from '@/modules/ingestion/ingestion-service';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
+import { formatErrorResponse } from '@/domain/errors';
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAdminAuth(req, ['SUPER_ADMIN', 'EDITOR']);
     const body = await req.json().catch(() => ({}));
     const { startYear, endYear, sources, languages, resume } = body;
 
@@ -19,14 +22,9 @@ export async function POST(req: NextRequest) {
       message: 'Historical catalog expansion completed successfully',
       data: result,
     });
-  } catch (error: any) {
-    console.error('API Error in /api/admin/catalog/expand-historical:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || 'Failed to execute historical catalog expansion',
-      },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const { error, status } = formatErrorResponse(err);
+    return NextResponse.json({ error }, { status });
   }
 }
+

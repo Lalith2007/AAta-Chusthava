@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { catalogAcquisitionService } from '@/modules/acquisition/catalog-acquisition-service';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
+import { formatErrorResponse } from '@/domain/errors';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
+    await requireAdminAuth(req, ['SUPER_ADMIN', 'EDITOR']);
     const { jobId } = await params;
     const body = await req.json().catch(() => ({}));
     const { action, payloadContent, dryRun, batchSize } = body;
 
     const job = await catalogAcquisitionService.getJobById(jobId);
     if (!job) {
-      return NextResponse.json({ success: false, error: 'Job not found' }, { status: 404 });
+      return NextResponse.json({ error: { message: 'Job not found', code: 'NOT_FOUND' } }, { status: 404 });
     }
 
     if (action === 'pause') {
@@ -23,7 +26,7 @@ export async function POST(
     if (action === 'run' || action === 'resume' || action === 'retry') {
       if (!payloadContent) {
         return NextResponse.json(
-          { success: false, error: "Action requires 'payloadContent' to process data" },
+          { error: { message: "Action requires 'payloadContent' to process data", code: 'INVALID_INPUT' } },
           { status: 400 }
         );
       }
@@ -37,13 +40,12 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { success: false, error: `Unsupported action '${action}'. Use 'run', 'pause', 'resume', or 'retry'` },
+      { error: { message: `Unsupported action '${action}'. Use 'run', 'pause', 'resume', or 'retry'`, code: 'INVALID_INPUT' } },
       { status: 400 }
     );
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to perform job action' },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const { error, status } = formatErrorResponse(err);
+    return NextResponse.json({ error }, { status });
   }
 }
+

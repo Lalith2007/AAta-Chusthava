@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminService } from '@/modules/admin/admin-service';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
 import { formatErrorResponse } from '@/domain/errors';
 import { z } from 'zod';
 
@@ -11,13 +12,14 @@ const MergeSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = await requireAdminAuth(req, ['SUPER_ADMIN', 'EDITOR']);
     const body = await req.json();
     const { primaryMovieId, duplicateMovieId, reason } = MergeSchema.parse(body);
 
     const result = await adminService.mergeMovies(
       primaryMovieId,
       duplicateMovieId,
-      'admin',
+      admin.id,
       reason
     );
 
@@ -27,3 +29,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error }, { status });
   }
 }
+

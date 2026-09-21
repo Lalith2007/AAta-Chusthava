@@ -463,6 +463,8 @@ model DailyPuzzle {
   targetSnapshot  Json?
   rulesetId       String
   selectionMethod SelectionMethod   @default(RANDOM)
+  selectionMetadata Json?
+  algorithmVersion String?           @default("DAILY_SELECTION_V1")
   status          DailyPuzzleStatus @default(ACTIVE)
   createdAt       DateTime          @default(now())
   activatedAt     DateTime?

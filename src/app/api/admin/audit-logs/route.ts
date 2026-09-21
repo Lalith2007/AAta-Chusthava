@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/infrastructure/db/client';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
 import { formatErrorResponse } from '@/domain/errors';
 
 export async function GET(req: NextRequest) {
   try {
+    await requireAdminAuth(req);
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
@@ -18,3 +20,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error }, { status });
   }
 }
+

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dailyPuzzleService } from '@/modules/daily/daily-puzzle-service';
 import { adminService } from '@/modules/admin/admin-service';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
 import { formatErrorResponse } from '@/domain/errors';
 import { z } from 'zod';
 
@@ -10,17 +11,20 @@ const ScheduleSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = await requireAdminAuth(req, ['SUPER_ADMIN', 'EDITOR']);
     const body = await req.json().catch(() => ({}));
     const { daysAhead } = ScheduleSchema.parse(body);
 
     const count = await dailyPuzzleService.ensureUpcomingPuzzlesScheduled(daysAhead);
     await adminService.logAudit(
-      'admin',
+      admin.id,
       'SCHEDULE_FUTURE_PUZZLES',
       'DailyPuzzle',
       'batch',
       null,
-      { count, daysAhead }
+      { count, daysAhead },
+      `Scheduled ${count} upcoming daily puzzles (${daysAhead} days ahead)`,
+      admin.role
     );
 
     return NextResponse.json({ success: true, scheduledCount: count });
@@ -29,3 +33,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error }, { status });
   }
 }
+
