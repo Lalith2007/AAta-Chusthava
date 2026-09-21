@@ -1,8 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/infrastructure/db/client';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
+import { formatErrorResponse } from '@/domain/errors';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    await requireAdminAuth(req);
     const checkpoints = await prisma.discoveryCheckpoint.findMany({
       orderBy: [{ year: 'asc' }, { source: 'asc' }, { language: 'asc' }],
     });
@@ -11,14 +14,9 @@ export async function GET() {
       success: true,
       data: checkpoints,
     });
-  } catch (error: any) {
-    console.error('API Error in /api/admin/catalog/checkpoints:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || 'Failed to fetch discovery checkpoints',
-      },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const { error, status } = formatErrorResponse(err);
+    return NextResponse.json({ error }, { status });
   }
 }
+

@@ -14,12 +14,13 @@ export class AdminService {
     entityId: string,
     before?: any,
     after?: any,
-    reason?: string
+    reason?: string,
+    actorRole = 'SUPER_ADMIN'
   ) {
     return prisma.auditLog.create({
       data: {
         actorId,
-        actorRole: 'SUPER_ADMIN',
+        actorRole,
         action,
         entityType,
         entityId,

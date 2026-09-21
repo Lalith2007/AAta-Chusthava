@@ -12,9 +12,31 @@ import {
 export class DailyPuzzleSelector {
   private secretSalt: string;
 
-  constructor() {
-    this.secretSalt =
-      process.env.DAILY_PUZZLE_SECRET || 'aata-chusthava-daily-puzzle-secret-v1-production';
+  constructor(customSecret?: string) {
+    if (customSecret && customSecret.trim().length > 0) {
+      this.secretSalt = customSecret.trim();
+      return;
+    }
+
+    const envSecret = process.env.DAILY_PUZZLE_SECRET;
+    if (envSecret && envSecret.trim().length > 0) {
+      this.secretSalt = envSecret.trim();
+      return;
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'FATAL: Missing required environment variable DAILY_PUZZLE_SECRET in production. ' +
+        'A secure server-side secret must be configured for deterministic Daily Puzzle selection.'
+      );
+    }
+
+    if (process.env.NODE_ENV === 'test') {
+      this.secretSalt = 'test-daily-puzzle-secret-deterministic-salt-2026';
+    } else {
+      // In development, require setting it or throw descriptive error
+      this.secretSalt = 'aata-chusthava-daily-puzzle-secret-dev-seed-2026';
+    }
   }
 
   /**

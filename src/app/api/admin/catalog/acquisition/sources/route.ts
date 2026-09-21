@@ -1,8 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { AcquisitionSourceRegistry } from '@/infrastructure/external-sources/acquisition-source';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
+import { formatErrorResponse } from '@/domain/errors';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    await requireAdminAuth(req);
     const registry = AcquisitionSourceRegistry.getInstance();
     const sources = registry.getRegisteredSources();
 
@@ -11,10 +14,9 @@ export async function GET() {
       sources,
       supportedFormats: ['CSV', 'JSON', 'NDJSON', 'API', 'BULK_FILE'],
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to fetch acquisition sources' },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const { error, status } = formatErrorResponse(err);
+    return NextResponse.json({ error }, { status });
   }
 }
+

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ingestionService } from '@/modules/ingestion/ingestion-service';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
 import { formatErrorResponse } from '@/domain/errors';
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAdminAuth(req, ['SUPER_ADMIN', 'EDITOR']);
     const body = await req.json();
     const { source, sourceMovieId, reason } = body;
 
@@ -29,3 +31,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error }, { status });
   }
 }
+

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { catalogCoverageService } from '@/modules/catalog/catalog-coverage-service';
+import { requireAdminAuth } from '@/infrastructure/auth/admin-auth';
 import { formatErrorResponse } from '@/domain/errors';
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
+    await requireAdminAuth(req);
     const report = await catalogCoverageService.getCoverageReport();
     return NextResponse.json({
       success: true,
@@ -14,3 +16,4 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ error }, { status });
   }
 }
+
