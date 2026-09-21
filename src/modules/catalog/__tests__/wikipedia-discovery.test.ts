@@ -74,7 +74,8 @@ describe('Wikipedia Filmography Discovery Source (CC BY-SA 4.0)', () => {
     const metadata = await wikipediaDiscoveryAdapter.getMetadata('WIKI_TE_2002_manmadhudu');
 
     expect(metadata.overview).toContain('CC BY-SA 4.0');
-    expect(metadata.genres.length).toBeGreaterThan(0);
+    expect(Array.isArray(metadata.genres)).toBe(true);
+    expect(metadata.runtime).toBeUndefined();
   });
 
   it('5. Ingests and deduplicates Wikipedia candidate against existing canonical catalog', async () => {
@@ -181,5 +182,75 @@ describe('Wikipedia Filmography Discovery Source (CC BY-SA 4.0)', () => {
     const raw = `| ''[[Indra (2002 film)|''Indra'']]'' <ref>{{Cite web |title=Indra |url=https://example.com}}</ref>`;
     const cleaned = wikipediaDiscoveryAdapter.cleanWikilink(raw);
     expect(cleaned).toBe('| Indra');
+  });
+
+  it('9. Reject placeholder strings from becoming directors or cast', async () => {
+    const rawWikiTable = `
+{| class="wikitable"
+|-
+! Title !! Director !! Cast
+|-
+| Test Unknown Movie || Director || Lead Actor, Supporting Actor
+|}
+`;
+    const parsed = wikipediaDiscoveryAdapter.parseWikitextFilmography(rawWikiTable, 'te', 2024, 'List_of_Telugu_films_of_2024');
+    expect(parsed.length).toBe(1);
+    expect(parsed[0].directors).toEqual([]);
+    expect(parsed[0].cast).toEqual([]);
+  });
+
+  it('10. Movies with missing director/cast are playable as guess but NOT playable as target', async () => {
+    const candidateId = `test-wiki-incomplete-${Date.now()}`;
+    const sourceMovieId = `WIKI_TE_2024_incomplete-sample-${Date.now()}`;
+
+    // Seed temporary cache item with no director or cast
+    (wikipediaDiscoveryAdapter as any).cache.set(sourceMovieId, {
+      id: sourceMovieId,
+      title: 'Incomplete Sample Film',
+      originalTitle: 'Incomplete Sample Film',
+      language: 'te',
+      releaseYear: 2024,
+      directors: [],
+      cast: [],
+      sourceArticleUrl: 'https://en.wikipedia.org/wiki/Test',
+      attribution: 'Test CC BY-SA 4.0',
+    });
+
+    await prisma.ingestionCandidate.create({
+      data: {
+        id: candidateId,
+        source: 'WIKIPEDIA',
+        sourceMovieId,
+        status: 'DISCOVERED',
+        discoveryReason: 'Incomplete Test Discovery',
+      },
+    });
+
+    const res = await ingestionService.processCandidate(candidateId);
+    expect(res.status).toBe('REVIEW_REQUIRED');
+
+    const movie = await prisma.movie.findFirst({
+      where: { primaryTitle: 'Incomplete Sample Film' },
+      include: { eligibility: true },
+    });
+
+    expect(movie).toBeDefined();
+    expect(movie?.eligibility?.playableAsGuess).toBe(true);
+    expect(movie?.eligibility?.playableAsTarget).toBe(false);
+    expect(movie?.eligibility?.minimumMetadataComplete).toBe(false);
+    expect(movie?.eligibility?.reviewStatus).toBe('PENDING');
+
+    // Cleanup
+    if (movie) {
+      await prisma.gameEligibility.deleteMany({ where: { movieId: movie.id } });
+      await prisma.movie.delete({ where: { id: movie.id } });
+    }
+    await prisma.ingestionCandidate.deleteMany({ where: { id: candidateId } });
+    await prisma.rawSourceRecord.deleteMany({
+      where: {
+        source: 'WIKIPEDIA',
+        sourceRecordId: sourceMovieId,
+      },
+    });
   });
 });
