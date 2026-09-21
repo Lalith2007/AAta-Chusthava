@@ -54,7 +54,8 @@ jobs:
     env:
       DATABASE_URL: "postgresql://postgres:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/aata_chusthava_test"
       NODE_ENV: test
-      ADMIN_API_SECRET: ${{ secrets.ADMIN_API_SECRET }}
+      ADMIN_API_SECRET: ${{ secrets.ADMIN_API_SECRET || 'aata_chusthava_ci_admin_secret_2026' }}
+      DAILY_PUZZLE_SECRET: ${{ secrets.DAILY_PUZZLE_SECRET || 'aata_chusthava_ci_daily_puzzle_secret_2026' }}
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
 
     steps:
@@ -84,6 +85,8 @@ jobs:
     needs: [lint-and-typecheck, test]
     env:
       DATABASE_URL: "postgresql://postgres:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/aata_chusthava_test"
+      ADMIN_API_SECRET: ${{ secrets.ADMIN_API_SECRET || 'aata_chusthava_ci_admin_secret_2026' }}
+      DAILY_PUZZLE_SECRET: ${{ secrets.DAILY_PUZZLE_SECRET || 'aata_chusthava_ci_daily_puzzle_secret_2026' }}
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
     steps:
       - name: Checkout code

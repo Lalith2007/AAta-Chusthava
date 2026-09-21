@@ -200,7 +200,7 @@ describe('PR #22 Security Hardening: Admin Authorization & Secret Management', (
         envObj.NODE_ENV = 'production';
         delete envObj.DAILY_PUZZLE_SECRET;
 
-        expect(() => new DailyPuzzleSelector()).toThrow(/FATAL: Missing required environment variable DAILY_PUZZLE_SECRET/);
+        expect(() => new DailyPuzzleSelector().getSecretSalt()).toThrow(/FATAL: Missing required environment variable DAILY_PUZZLE_SECRET/);
       } finally {
         envObj.NODE_ENV = oldEnv;
         envObj.DAILY_PUZZLE_SECRET = oldSecret;

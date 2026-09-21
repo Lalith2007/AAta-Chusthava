@@ -10,18 +10,26 @@ import {
 } from './types';
 
 export class DailyPuzzleSelector {
-  private secretSalt: string;
+  private customSecret?: string;
 
   constructor(customSecret?: string) {
     if (customSecret && customSecret.trim().length > 0) {
-      this.secretSalt = customSecret.trim();
-      return;
+      this.customSecret = customSecret.trim();
+    }
+  }
+
+  /**
+   * Resolves the server-side secret salt.
+   * Fails fast and clearly if missing in production.
+   */
+  public getSecretSalt(): string {
+    if (this.customSecret) {
+      return this.customSecret;
     }
 
     const envSecret = process.env.DAILY_PUZZLE_SECRET;
     if (envSecret && envSecret.trim().length > 0) {
-      this.secretSalt = envSecret.trim();
-      return;
+      return envSecret.trim();
     }
 
     if (process.env.NODE_ENV === 'production') {
@@ -32,20 +40,20 @@ export class DailyPuzzleSelector {
     }
 
     if (process.env.NODE_ENV === 'test') {
-      this.secretSalt = 'test-daily-puzzle-secret-deterministic-salt-2026';
-    } else {
-      // In development, require setting it or throw descriptive error
-      this.secretSalt = 'aata-chusthava-daily-puzzle-secret-dev-seed-2026';
+      return 'test-daily-puzzle-secret-deterministic-salt-2026';
     }
+
+    return 'aata-chusthava-daily-puzzle-secret-dev-seed-2026';
   }
 
   /**
    * Computes a deterministic pseudo-random float [0, 1) from date, movie ID, and server salt.
    */
   public computeDeterministicJitter(puzzleDate: string, movieId: string): number {
+    const salt = this.getSecretSalt();
     const hash = crypto
       .createHash('sha256')
-      .update(`${puzzleDate}:${movieId}:${this.secretSalt}`)
+      .update(`${puzzleDate}:${movieId}:${salt}`)
       .digest('hex');
     const intVal = parseInt(hash.substring(0, 8), 16);
     return intVal / 0xffffffff;
@@ -197,9 +205,10 @@ export class DailyPuzzleSelector {
       preferredLanguage = 'HINDI';
     } else {
       // Deterministic tie-break based on puzzle date and salt
+      const salt = this.getSecretSalt();
       const tieHash = crypto
         .createHash('sha256')
-        .update(`${puzzleDate}:lang_tiebreak:${this.secretSalt}`)
+        .update(`${puzzleDate}:lang_tiebreak:${salt}`)
         .digest('hex');
       preferredLanguage = parseInt(tieHash.substring(0, 4), 16) % 2 === 0 ? 'TELUGU' : 'HINDI';
     }
