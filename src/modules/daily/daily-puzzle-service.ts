@@ -339,14 +339,14 @@ export class DailyPuzzleService {
   }
 
   /**
-   * Idempotently schedules upcoming daily puzzles for N days ahead from today (IST).
+   * Idempotently schedules upcoming daily puzzles for N days ahead from today (or fromDate).
    */
-  async ensureUpcomingPuzzlesScheduled(daysAhead = 7): Promise<number> {
+  async ensureUpcomingPuzzlesScheduled(daysAhead = 7, fromDate?: string): Promise<number> {
     let scheduledCount = 0;
-    const todayIST = getIndianCalendarDate(new Date());
+    const startIST = fromDate ? this.resolvePuzzleDate(fromDate) : getIndianCalendarDate(new Date());
 
-    for (let i = 0; i <= daysAhead; i++) {
-      const dateStr = addDaysToPuzzleDate(todayIST, i);
+    for (let i = 0; i < daysAhead; i++) {
+      const dateStr = addDaysToPuzzleDate(startIST, i);
 
       const existing = await prisma.dailyPuzzle.findUnique({
         where: { puzzleDate: dateStr },

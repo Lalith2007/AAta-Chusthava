@@ -131,10 +131,12 @@ export class DailyPuzzleSelector {
         p.relationType === 'CAST' &&
         isValidPersonName(p.person.canonicalName)
     );
-    const hasLeadActor = validLeadCast.length >= 1;
+    const hasPrimaryLead = validLeadCast.length >= 1;
+    const hasLeadActor = hasPrimaryLead;
 
-    // 8. Lead Actress / Co-Lead (Secondary Lead)
-    const hasLeadActress = validLeadCast.length >= 2;
+    // 8. Secondary Lead / Co-Lead (backs LEAD_ACTRESS clue evaluator proxy)
+    const hasSecondaryLead = validLeadCast.length >= 2;
+    const hasLeadActress = hasSecondaryLead;
 
     // 9. Supporting Cast
     const validSupportingCast = movie.people.filter(
@@ -205,6 +207,8 @@ export class DailyPuzzleSelector {
       languages: movie.supportedLanguages as ('TELUGU' | 'HINDI')[],
       directorsCount: validDirectors.length,
       castCount: validCast.length,
+      hasPrimaryLead,
+      hasSecondaryLead,
       hasSupportingCast,
       hasMusicDirector,
       hasStudio,

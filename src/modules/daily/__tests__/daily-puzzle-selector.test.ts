@@ -195,6 +195,78 @@ describe('Deterministic Daily Puzzle Engine (DAILY_SELECTION_V1)', () => {
       // Movie from day 1 MUST NOT be selected on day 2
       expect(movie2Id).not.toBe(puzzle1!.targetMovieId);
     });
+
+    it('sequential 14-day Daily scheduling respects 60-day cooldown and remains idempotent', async () => {
+      const SEQ_START_DATE = '2035-01-01';
+      const seqDates: string[] = [];
+      for (let i = 0; i < 14; i++) {
+        seqDates.push(addDaysToPuzzleDate(SEQ_START_DATE, i));
+      }
+
+      // 1. Clean up any existing test rows
+      await prisma.dailyPuzzle.deleteMany({
+        where: { puzzleDate: { in: seqDates } },
+      });
+
+      try {
+        // 2. Schedule and persist day-by-day sequentially
+        const scheduledPuzzles: any[] = [];
+        for (const date of seqDates) {
+          await dailyPuzzleService.getOrCreatePuzzleForDate(date);
+          const puzzle = await prisma.dailyPuzzle.findUnique({
+            where: { puzzleDate: date },
+            include: {
+              targetMovie: {
+                include: { eligibility: true },
+              },
+            },
+          });
+          expect(puzzle).not.toBeNull();
+          scheduledPuzzles.push(puzzle!);
+        }
+
+        // 3. Verify all 14 dates exist
+        expect(scheduledPuzzles.length).toBe(14);
+
+        // 4. Verify all 14 target movie IDs are unique (zero duplicates)
+        const targetIds = scheduledPuzzles.map((p) => p.targetMovieId);
+        const uniqueTargetIds = new Set(targetIds);
+        expect(uniqueTargetIds.size).toBe(14);
+
+        // 5. Verify cooldown: no target repeats within 60 days
+        for (let i = 0; i < scheduledPuzzles.length; i++) {
+          const currentPuzzle = scheduledPuzzles[i];
+          // Check that target is ACTIVE and playableAsTarget
+          expect(currentPuzzle.targetMovie.lifecycleStatus).toBe('ACTIVE');
+          expect(currentPuzzle.targetMovie.eligibility?.playableAsTarget).toBe(true);
+
+          // Ensure no duplicate within the window
+          for (let j = 0; j < i; j++) {
+            expect(currentPuzzle.targetMovieId).not.toBe(scheduledPuzzles[j].targetMovieId);
+          }
+        }
+
+        // 6. Test Idempotency: re-running scheduling creates 0 new DailyPuzzle rows
+        const beforeCount = await prisma.dailyPuzzle.count({
+          where: { puzzleDate: { in: seqDates } },
+        });
+        expect(beforeCount).toBe(14);
+
+        // Re-run ensureUpcomingPuzzlesScheduled for the same 14 days (must be idempotent)
+        const scheduledNew = await dailyPuzzleService.ensureUpcomingPuzzlesScheduled(14, SEQ_START_DATE);
+        expect(scheduledNew).toBe(0);
+
+        const afterCount = await prisma.dailyPuzzle.count({
+          where: { puzzleDate: { in: seqDates } },
+        });
+        expect(afterCount).toBe(14);
+      } finally {
+        // Cleanup isolated test-date rows
+        await prisma.dailyPuzzle.deleteMany({
+          where: { puzzleDate: { in: seqDates } },
+        });
+      }
+    });
   });
 
   // 5. LANGUAGE BALANCING

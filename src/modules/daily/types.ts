@@ -14,6 +14,8 @@ export interface TargetQualityProfile {
   languages: ('TELUGU' | 'HINDI')[];
   directorsCount: number;
   castCount: number;
+  hasPrimaryLead: boolean;
+  hasSecondaryLead: boolean;
   hasSupportingCast: boolean;
   hasMusicDirector: boolean;
   hasStudio: boolean;
