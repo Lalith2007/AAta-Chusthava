@@ -9,7 +9,7 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     await ingestionService.runHistoricalCatalogExpansion({
       startYear: 2002,
       endYear: 2026,
-      sources: ['TMDB', 'WIKIDATA'],
+      sources: ['TMDB', 'WIKIDATA', 'WIKIPEDIA'],
       languages: ['te', 'hi'],
       resume: true,
     });
