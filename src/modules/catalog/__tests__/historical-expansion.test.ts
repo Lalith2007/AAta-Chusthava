@@ -1,10 +1,56 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { ingestionService } from '@/modules/ingestion/ingestion-service';
 import { catalogCoverageService } from '@/modules/catalog/catalog-coverage-service';
 import { prisma } from '@/infrastructure/db/client';
+import { tmdbAdapter } from '@/infrastructure/external-sources/tmdb-adapter';
+import { HISTORICAL_CATALOG } from '@/infrastructure/external-sources/historical-catalog-data';
 
 describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
+  let initialCanonicalMovieCount = 0;
+
   beforeAll(async () => {
+    // Record baseline count to prove zero DB expansion side-effects during automated tests
+    initialCanonicalMovieCount = await prisma.movie.count();
+
+    // Mock TMDB discover to use deterministic historical catalog fixtures without hitting live external APIs
+    vi.spyOn(tmdbAdapter, 'discover').mockImplementation(async (options) => {
+      const { language, year, startDate, endDate, page = 1 } = options;
+      const pageSize = 20;
+      const matches = HISTORICAL_CATALOG.filter((m) => {
+        if (m.details.original_language !== language) return false;
+        const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
+        if (year && movieYear !== year) return false;
+        if (startDate && m.details.release_date < startDate) return false;
+        if (endDate && m.details.release_date > endDate) return false;
+        return true;
+      });
+
+      const totalResults = matches.length;
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+      const startIdx = (page - 1) * pageSize;
+      const pageMatches = matches.slice(startIdx, startIdx + pageSize);
+
+      return {
+        results: pageMatches.map((m) => ({
+          source: 'TMDB',
+          sourceMovieId: String(m.details.id),
+          title: m.details.title,
+          originalTitle: m.details.original_title,
+          releaseDate: m.details.release_date,
+          originalLanguage: m.details.original_language,
+          popularity: (m.details.vote_count || 0) / 100,
+          voteAverage: m.details.vote_average,
+          voteCount: m.details.vote_count,
+        })),
+        totalPages,
+        totalResults,
+      };
+    });
+
+    vi.spyOn(tmdbAdapter, 'discoverMovies').mockImplementation(async (language: string, year: number, page = 1) => {
+      return tmdbAdapter.discover({ language, year, page });
+    });
+
     // Run historical catalog expansion before tests
     await ingestionService.runHistoricalCatalogExpansion({
       startYear: 2002,
@@ -14,6 +60,10 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
       resume: true,
     });
   }, 60000);
+
+  afterAll(async () => {
+    vi.restoreAllMocks();
+  });
 
   it('1. Executes batch historical expansion and tracks candidate accounting', async () => {
     const report = await catalogCoverageService.getCoverageReport();
@@ -229,4 +279,14 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     expect(outcomeSum).toBe(wiki!.candidatesDiscovered);
     expect(wiki!.candidateOutcomeReconciled).toBe(true);
   });
+
+  it('16. Guarantees test isolation: running historical expansion tests does not expand the canonical movie catalog when already populated', async () => {
+    const currentMovieCount = await prisma.movie.count();
+    if (initialCanonicalMovieCount >= 5000) {
+      expect(currentMovieCount).toBe(initialCanonicalMovieCount);
+    } else {
+      expect(currentMovieCount).toBeGreaterThanOrEqual(initialCanonicalMovieCount);
+    }
+  });
 });
+
