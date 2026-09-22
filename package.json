@@ -16,7 +16,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "db:seed": "npx tsx prisma/seed.ts"
+    "db:seed": "npx tsx prisma/seed.ts",
+    "audit:posters": "npx tsx scripts/audit-posters.ts",
+    "enrich:posters": "npx tsx scripts/enrich-posters.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
