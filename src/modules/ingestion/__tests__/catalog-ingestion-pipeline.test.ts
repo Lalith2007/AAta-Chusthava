@@ -147,10 +147,20 @@ describe('Sprint 27: Production Catalog Ingestion & Continuous Discovery Pipelin
   });
 
   it('6. Deduplication by TMDB ID matches existing movie and prevents duplicate creation', async () => {
-    const existing = await prisma.movie.findFirst({
+    let existing = await prisma.movie.findFirst({
       where: { tmdbId: { not: null }, lifecycleStatus: 'ACTIVE' },
     });
-    expect(existing).toBeDefined();
+
+    if (!existing) {
+      const anyMovie = await prisma.movie.findFirst({
+        where: { lifecycleStatus: 'ACTIVE' },
+      });
+      expect(anyMovie).toBeDefined();
+      existing = await prisma.movie.update({
+        where: { id: anyMovie!.id },
+        data: { tmdbId: 999901 },
+      });
+    }
 
     const match = await ingestionService.findExistingCanonicalMovie({
       tmdbId: existing!.tmdbId,
