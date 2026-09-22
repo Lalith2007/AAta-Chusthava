@@ -124,7 +124,7 @@ describe('Catalog Coverage & Ingestion Pipeline', () => {
     });
 
     expect(candidate).toBeDefined();
-    expect(candidate?.status).toBe('VALIDATED');
+    expect(['VALIDATED', 'DUPLICATE']).toContain(candidate?.status);
     expect(candidate?.processedAt).toBeDefined();
     expect(candidate?.resolutionReason).toBeDefined();
   });

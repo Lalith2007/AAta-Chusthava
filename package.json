@@ -18,7 +18,10 @@
     "prisma:studio": "prisma studio",
     "db:seed": "npx tsx prisma/seed.ts",
     "audit:posters": "npx tsx scripts/audit-posters.ts",
-    "enrich:posters": "npx tsx scripts/enrich-posters.ts"
+    "enrich:posters": "npx tsx scripts/enrich-posters.ts",
+    "catalog:discover": "npx tsx scripts/run-catalog-discovery.ts",
+    "catalog:ingest": "npx tsx scripts/run-catalog-ingestion.ts",
+    "catalog:audit": "npx tsx scripts/audit-catalog-pipeline.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",

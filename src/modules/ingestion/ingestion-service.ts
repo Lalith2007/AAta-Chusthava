@@ -1,10 +1,78 @@
 import { prisma } from '@/infrastructure/db/client';
+import { BoxOfficeStatus } from '@prisma/client';
 import { tmdbAdapter, MovieDataSource, TmdbMovieDetails, TmdbCredits } from '@/infrastructure/external-sources/tmdb-adapter';
 import { wikidataDiscoveryAdapter, WikidataMovieRecord } from '@/infrastructure/external-sources/wikidata-adapter';
 import { wikipediaDiscoveryAdapter, isValidPersonName } from '@/infrastructure/external-sources/wikipedia-adapter';
 import { DiscoverySourceRegistry } from '@/infrastructure/external-sources/discovery-source';
 import { MovieLanguage, MovieIndustry, RoleType, RelationType, ProductionHouseRole } from '@/domain/movie/types';
 import { queueService } from '@/infrastructure/queue/queue-service';
+import { resolvePosterUrl } from '@/lib/poster-utils';
+
+export function normalizeMovieTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, '')
+    .replace(/[:\-–—_]/g, ' ')
+    .replace(/[^\w\s]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+export interface ContinuousDiscoveryOptions {
+  languages?: Array<'te' | 'hi'>;
+  year?: number;
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD
+  maxPages?: number;
+  limit?: number;
+  dryRun?: boolean;
+  onProgress?: (progress: {
+    stage: 'DISCOVERING' | 'DEDUPLICATING' | 'PROCESSING' | 'COMPLETED';
+    current: number;
+    total: number;
+    message: string;
+  }) => void;
+}
+
+export interface IngestionRunReport {
+  mode: 'DRY_RUN' | 'LIVE';
+  languages: string[];
+  window: { year?: number; startDate?: string; endDate?: string };
+  discovery: {
+    source: string;
+    pagesProcessed: number;
+    rawDiscoveries: number;
+  };
+  deduplication: {
+    newCandidates: number;
+    duplicatesMerged: number;
+    alreadyKnown: number;
+  };
+  validation: {
+    accepted: number;
+    needsReview: number;
+    rejected: number;
+  };
+  enrichment: {
+    enriched: number;
+    postersAssigned: number;
+    failures: number;
+  };
+  playability: {
+    playableGuess: number;
+    playableTarget: number;
+    playableBoth: number;
+    notPlayable: number;
+  };
+  targetIntegrity: {
+    dailyPuzzlesAffected: number;
+    challengesAffected: number;
+    gamesAffected: number;
+    targetIntegrityPass: boolean;
+  };
+  errors: Array<{ sourceId: string; error: string }>;
+  durationMs: number;
+}
 
 export interface IngestionResult {
   candidateId: string;
@@ -259,53 +327,43 @@ export class IngestionService {
       const industry = this.mapIndustry(primaryLang);
       const slug = this.slugify(details.title, releaseYear);
 
-      let movie = await prisma.movie.findUnique({
-        where: { tmdbId: details.id },
+      let movie = await this.findExistingCanonicalMovie({
+        tmdbId: details.id,
+        title: details.title,
+        releaseYear,
+        alternativeTitles: altTitles,
       });
 
       let isNewMovie = false;
       let isDuplicate = false;
 
-      if (!movie) {
-        const existingBySlug = await prisma.movie.findUnique({
-          where: { slug },
-        });
-
-        const existingByTitleYear = await prisma.movie.findFirst({
-          where: {
-            primaryTitle: { equals: details.title, mode: 'insensitive' },
-            releaseYear,
-          },
-        });
-
-        movie = existingBySlug || existingByTitleYear;
-
-        if (movie) {
-          isDuplicate = true;
-          if (!movie.tmdbId) {
-            movie = await prisma.movie.update({
-              where: { id: movie.id },
-              data: { tmdbId: details.id },
-            });
-          }
-        }
-      }
-
       const posterAsset = details.poster_path
-        ? details.poster_path.startsWith('http')
-          ? details.poster_path
-          : `https://image.tmdb.org/t/p/w500${details.poster_path}`
+        ? resolvePosterUrl(details.poster_path)
         : null;
       const backdropAsset = details.backdrop_path
-        ? details.backdrop_path.startsWith('http')
-          ? details.backdrop_path
-          : `https://image.tmdb.org/t/p/w1280${details.backdrop_path}`
+        ? resolvePosterUrl(details.backdrop_path)
         : null;
 
       const boxOffice = details.revenue && details.revenue > 0 ? details.revenue : null;
-      const boxOfficeStatus = boxOffice ? 'REPORTED' : 'UNKNOWN';
+      const boxOfficeStatus: BoxOfficeStatus = boxOffice ? 'REPORTED' : 'UNAVAILABLE';
+      const budget = details.budget && details.budget > 0 ? details.budget : null;
 
-      if (!movie) {
+      if (movie) {
+        isDuplicate = true;
+        const updates: any = {};
+        if (!movie.tmdbId && details.id) {
+          updates.tmdbId = details.id;
+        }
+        if (!movie.posterAsset && posterAsset) {
+          updates.posterAsset = posterAsset;
+        }
+        if (Object.keys(updates).length > 0) {
+          movie = await prisma.movie.update({
+            where: { id: movie.id },
+            data: updates,
+          });
+        }
+      } else {
         isNewMovie = true;
         movie = await prisma.movie.create({
           data: {
@@ -321,7 +379,7 @@ export class IngestionService {
             canonicalIndiaReleaseDate: details.release_date
               ? new Date(details.release_date)
               : null,
-            budget: details.budget && details.budget > 0 ? details.budget : null,
+            budget,
             boxOffice,
             boxOfficeStatus,
             rating: details.vote_average || null,
@@ -582,7 +640,9 @@ export class IngestionService {
 
       const hasDirector = directors.length > 0;
       const hasCast = topCast.length >= 2;
-      const isTargetPlayable = hasDirector && hasCast && !!movie.releaseYear;
+      const hasGenres = details.genres && details.genres.length >= 1;
+      const hasReleaseYear = !!movie.releaseYear && movie.releaseYear >= 2002;
+      const isTargetPlayable = hasDirector && hasCast && hasGenres && hasReleaseYear;
 
       await prisma.gameEligibility.upsert({
         where: { movieId: movie.id },
@@ -592,12 +652,15 @@ export class IngestionService {
           playableAsTarget: isTargetPlayable,
           minimumMetadataComplete: hasDirector && hasCast,
           reviewStatus: isTargetPlayable ? 'APPROVED' : 'PENDING',
+          disabledReason: isTargetPlayable ? null : 'INSUFFICIENT_CLUE_COVERAGE',
           updatedAt: new Date(),
         },
         update: {
           playableAsGuess: true,
           playableAsTarget: isTargetPlayable,
           minimumMetadataComplete: hasDirector && hasCast,
+          reviewStatus: isTargetPlayable ? 'APPROVED' : 'PENDING',
+          disabledReason: isTargetPlayable ? null : 'INSUFFICIENT_CLUE_COVERAGE',
           updatedAt: new Date(),
         },
       });
@@ -1742,6 +1805,323 @@ export class IngestionService {
     };
   }
 
+  async findExistingCanonicalMovie(params: {
+    tmdbId?: number | null;
+    wikidataId?: string | null;
+    imdbId?: string | null;
+    title: string;
+    releaseYear: number;
+    alternativeTitles?: string[];
+  }) {
+    // 1. External ID matches
+    if (params.tmdbId) {
+      const match = await prisma.movie.findUnique({ where: { tmdbId: params.tmdbId } });
+      if (match) return match;
+    }
+    if (params.wikidataId) {
+      const match = await prisma.movie.findFirst({ where: { wikidataId: params.wikidataId } });
+      if (match) return match;
+    }
+    if (params.imdbId) {
+      const match = await prisma.movie.findFirst({ where: { imdbId: params.imdbId } });
+      if (match) return match;
+    }
+
+    // 2. Slug Match
+    const slug = this.slugify(params.title, params.releaseYear);
+    const matchBySlug = await prisma.movie.findUnique({ where: { slug } });
+    if (matchBySlug) return matchBySlug;
+
+    // 3. Exact Title & Year Match (Case-Insensitive)
+    const matchByTitleYear = await prisma.movie.findFirst({
+      where: {
+        primaryTitle: { equals: params.title.trim(), mode: 'insensitive' },
+        releaseYear: params.releaseYear,
+      },
+    });
+    if (matchByTitleYear) return matchByTitleYear;
+
+    // 4. Normalized Title & Year Range (+/- 1 year tolerance)
+    const normalizedInput = normalizeMovieTitle(params.title);
+    if (normalizedInput.length >= 3) {
+      const candidateYears = [params.releaseYear, params.releaseYear - 1, params.releaseYear + 1];
+      const yearMatches = await prisma.movie.findMany({
+        where: { releaseYear: { in: candidateYears } },
+        select: { id: true, primaryTitle: true, releaseYear: true, tmdbId: true, alternativeTitles: true },
+      });
+
+      for (const m of yearMatches) {
+        if (normalizeMovieTitle(m.primaryTitle) === normalizedInput) {
+          return prisma.movie.findUnique({ where: { id: m.id } });
+        }
+        for (const alt of m.alternativeTitles || []) {
+          if (normalizeMovieTitle(alt) === normalizedInput) {
+            return prisma.movie.findUnique({ where: { id: m.id } });
+          }
+        }
+      }
+    }
+
+    // 5. Cross-check input's alternative titles
+    if (params.alternativeTitles && params.alternativeTitles.length > 0) {
+      for (const alt of params.alternativeTitles) {
+        const normAlt = normalizeMovieTitle(alt);
+        if (normAlt.length < 3) continue;
+        const altMatch = await prisma.movie.findFirst({
+          where: {
+            primaryTitle: { equals: alt.trim(), mode: 'insensitive' },
+            releaseYear: params.releaseYear,
+          },
+        });
+        if (altMatch) return altMatch;
+      }
+    }
+
+    return null;
+  }
+
+  async runContinuousDiscovery(
+    options: ContinuousDiscoveryOptions = {}
+  ): Promise<IngestionRunReport> {
+    const startTime = Date.now();
+    const dryRun = options.dryRun === true;
+    const languages = options.languages && options.languages.length > 0 ? options.languages : ['te', 'hi'];
+    const maxPages = options.maxPages || 5;
+    const limit = options.limit;
+
+    // Snapshot target identities before run to ensure immutability
+    const dailyPuzzlesBefore = await prisma.dailyPuzzle.findMany({ select: { id: true, targetMovieId: true } });
+    const challengesBefore = await prisma.challenge.findMany({ select: { id: true, targetMovieId: true } });
+    const gamesBefore = await prisma.game.findMany({ select: { id: true, targetMovieId: true } });
+
+    let pagesProcessed = 0;
+    let rawDiscoveries = 0;
+    let newCandidates = 0;
+    let duplicatesMerged = 0;
+    let alreadyKnown = 0;
+    let accepted = 0;
+    let needsReview = 0;
+    let rejected = 0;
+    let enriched = 0;
+    let postersAssigned = 0;
+    let failures = 0;
+    let playableGuess = 0;
+    let playableTarget = 0;
+    let playableBoth = 0;
+    let notPlayable = 0;
+    const errors: Array<{ sourceId: string; error: string }> = [];
+
+    let totalProcessedCount = 0;
+
+    for (const lang of languages) {
+      let page = 1;
+      let totalPages = 1;
+
+      do {
+        let discoverRes: { results: any[]; totalPages: number; totalResults: number };
+        try {
+          if (typeof this.sourceAdapter.discover === 'function') {
+            discoverRes = await this.sourceAdapter.discover({
+              language: lang,
+              year: options.year,
+              startDate: options.startDate,
+              endDate: options.endDate,
+              page,
+            });
+          } else {
+            discoverRes = await this.sourceAdapter.discoverMovies(lang, options.year || new Date().getFullYear(), page);
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          errors.push({ sourceId: `PAGE_${page}`, error: msg });
+          failures++;
+          break;
+        }
+
+        pagesProcessed++;
+        totalPages = Math.min(discoverRes.totalPages || 1, maxPages);
+        rawDiscoveries += discoverRes.results.length;
+
+        for (const item of discoverRes.results) {
+          if (limit && totalProcessedCount >= limit) {
+            break;
+          }
+
+          const existingCandidate = await prisma.ingestionCandidate.findUnique({
+            where: {
+              source_sourceMovieId: {
+                source: 'TMDB',
+                sourceMovieId: item.sourceMovieId,
+              },
+            },
+          });
+
+          if (existingCandidate && ['VALIDATED', 'DUPLICATE'].includes(existingCandidate.status)) {
+            alreadyKnown++;
+            totalProcessedCount++;
+            continue;
+          }
+
+          if (dryRun) {
+            // In dry run, check if a canonical match exists in DB without writes
+            const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split('-')[0], 10) : (options.year || 0);
+            if (!releaseYear || releaseYear < 2002) {
+              rejected++;
+              notPlayable++;
+            } else {
+              const tmdbIdNum = parseInt(item.sourceMovieId, 10);
+              const match = await this.findExistingCanonicalMovie({
+                tmdbId: isNaN(tmdbIdNum) ? null : tmdbIdNum,
+                title: item.title,
+                releaseYear,
+              });
+
+              if (match) {
+                duplicatesMerged++;
+                playableGuess++;
+              } else {
+                newCandidates++;
+                accepted++;
+                playableGuess++;
+                playableBoth++;
+              }
+            }
+            totalProcessedCount++;
+            continue;
+          }
+
+          // Live Run
+          try {
+            const candidate = await prisma.ingestionCandidate.upsert({
+              where: {
+                source_sourceMovieId: {
+                  source: 'TMDB',
+                  sourceMovieId: item.sourceMovieId,
+                },
+              },
+              create: {
+                source: 'TMDB',
+                sourceMovieId: item.sourceMovieId,
+                discoveryReason: `Continuous Discovery ${lang.toUpperCase()} ${options.year || ''} ${options.startDate || ''}-${options.endDate || ''} p${page}`,
+                status: 'DISCOVERED',
+              },
+              update: {},
+            });
+
+            newCandidates++;
+
+            const res = await this.processCandidate(candidate.id);
+            if (res.status === 'PROCESSED') {
+              accepted++;
+              enriched++;
+              playableBoth++;
+              playableGuess++;
+              playableTarget++;
+            } else if (res.status === 'REVIEW_REQUIRED') {
+              needsReview++;
+              enriched++;
+              playableGuess++;
+            } else if (res.status === 'SKIPPED') {
+              if (res.isDuplicate) {
+                duplicatesMerged++;
+                playableGuess++;
+              } else {
+                rejected++;
+                notPlayable++;
+              }
+            } else {
+              failures++;
+              if (res.reason) errors.push({ sourceId: item.sourceMovieId, error: res.reason });
+            }
+
+            if (res.movieId) {
+              const m = await prisma.movie.findUnique({ where: { id: res.movieId }, select: { posterAsset: true } });
+              if (m?.posterAsset) postersAssigned++;
+            }
+          } catch (err: unknown) {
+            failures++;
+            const msg = err instanceof Error ? err.message : String(err);
+            errors.push({ sourceId: item.sourceMovieId, error: msg });
+          }
+
+          totalProcessedCount++;
+        }
+
+        if (limit && totalProcessedCount >= limit) {
+          break;
+        }
+
+        page++;
+      } while (page <= totalPages);
+
+      if (limit && totalProcessedCount >= limit) {
+        break;
+      }
+    }
+
+    // Post-run Target Immutability Verification
+    const dailyPuzzlesAfter = await prisma.dailyPuzzle.findMany({ select: { id: true, targetMovieId: true } });
+    const challengesAfter = await prisma.challenge.findMany({ select: { id: true, targetMovieId: true } });
+    const gamesAfter = await prisma.game.findMany({ select: { id: true, targetMovieId: true } });
+
+    const dpDiff = dailyPuzzlesBefore.filter((b) => {
+      const a = dailyPuzzlesAfter.find((x) => x.id === b.id);
+      return !a || a.targetMovieId !== b.targetMovieId;
+    }).length;
+
+    const chDiff = challengesBefore.filter((b) => {
+      const a = challengesAfter.find((x) => x.id === b.id);
+      return !a || a.targetMovieId !== b.targetMovieId;
+    }).length;
+
+    const gmDiff = gamesBefore.filter((b) => {
+      const a = gamesAfter.find((x) => x.id === b.id);
+      return !a || a.targetMovieId !== b.targetMovieId;
+    }).length;
+
+    const targetIntegrityPass = dpDiff === 0 && chDiff === 0 && gmDiff === 0;
+
+    return {
+      mode: dryRun ? 'DRY_RUN' : 'LIVE',
+      languages: languages.map((l) => l.toUpperCase()),
+      window: { year: options.year, startDate: options.startDate, endDate: options.endDate },
+      discovery: {
+        source: 'TMDB',
+        pagesProcessed,
+        rawDiscoveries,
+      },
+      deduplication: {
+        newCandidates,
+        duplicatesMerged,
+        alreadyKnown,
+      },
+      validation: {
+        accepted,
+        needsReview,
+        rejected,
+      },
+      enrichment: {
+        enriched,
+        postersAssigned,
+        failures,
+      },
+      playability: {
+        playableGuess,
+        playableTarget,
+        playableBoth,
+        notPlayable,
+      },
+      targetIntegrity: {
+        dailyPuzzlesAffected: dpDiff,
+        challengesAffected: chDiff,
+        gamesAffected: gmDiff,
+        targetIntegrityPass,
+      },
+      errors,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
   async runHistoricalBatch(startYear = 2002, endYear = 2026) {
     const job = await queueService.enqueue('DISCOVER_RELEASES', { startYear, endYear });
     return job;
@@ -1749,4 +2129,5 @@ export class IngestionService {
 }
 
 export const ingestionService = new IngestionService();
+
 

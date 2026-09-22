@@ -53,11 +53,23 @@ export interface TmdbCredits {
   }>;
 }
 
+export interface TmdbDiscoveryOptions {
+  language: string; // 'te' | 'hi'
+  year?: number;
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD
+  sortBy?: string;
+  page?: number;
+}
+
 export interface MovieDataSource {
   discoverMovies(
     language: string,
     year: number,
     page?: number
+  ): Promise<{ results: DiscoveredMovieSummary[]; totalPages: number; totalResults: number }>;
+  discover?(
+    options: TmdbDiscoveryOptions
   ): Promise<{ results: DiscoveredMovieSummary[]; totalPages: number; totalResults: number }>;
   getMovieDetails(sourceMovieId: string): Promise<TmdbMovieDetails>;
   getCredits(sourceMovieId: string): Promise<TmdbCredits>;
@@ -104,105 +116,137 @@ export class TmdbAdapter implements MovieDataSource {
     return url.toString();
   }
 
+  private async fetchWithRetry(url: string, maxRetries = 2): Promise<Response> {
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetch(url, { headers: this.getHeaders() });
+        if (res.status === 429) {
+          if (attempt < maxRetries) {
+            const retryAfter = res.headers.get('Retry-After');
+            const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000 * Math.pow(2, attempt);
+            await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 5000)));
+            continue;
+          }
+        }
+        if (res.status >= 500 && attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * Math.pow(2, attempt)));
+          continue;
+        }
+        return res;
+      } catch (err: unknown) {
+        lastError = err;
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * Math.pow(2, attempt)));
+          continue;
+        }
+      }
+    }
+    throw lastError || new Error(`Failed to fetch from TMDB: ${url}`);
+  }
+
+  async discover(
+    options: TmdbDiscoveryOptions
+  ): Promise<{ results: DiscoveredMovieSummary[]; totalPages: number; totalResults: number }> {
+    const { language, year, startDate, endDate, sortBy = 'popularity.desc', page = 1 } = options;
+
+    if (!this.isConfigured()) {
+      // Return matching movies from canonical historical catalog
+      const pageSize = 20;
+      const matches = HISTORICAL_CATALOG.filter((m) => {
+        if (m.details.original_language !== language) return false;
+        const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
+        if (year && movieYear !== year) return false;
+        if (startDate && m.details.release_date < startDate) return false;
+        if (endDate && m.details.release_date > endDate) return false;
+        return true;
+      });
+
+      const totalResults = matches.length;
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+      const startIdx = (page - 1) * pageSize;
+      const pageMatches = matches.slice(startIdx, startIdx + pageSize);
+
+      const results: DiscoveredMovieSummary[] = pageMatches.map((m) => ({
+        source: 'TMDB',
+        sourceMovieId: String(m.details.id),
+        title: m.details.title,
+        originalTitle: m.details.original_title,
+        releaseDate: m.details.release_date,
+        originalLanguage: m.details.original_language,
+        popularity: (m.details.vote_count || 0) / 100,
+        voteAverage: m.details.vote_average,
+        voteCount: m.details.vote_count,
+      }));
+
+      return {
+        results,
+        totalPages,
+        totalResults,
+      };
+    }
+
+    const queryParams: Record<string, string | number> = {
+      with_original_language: language,
+      sort_by: sortBy,
+      page,
+    };
+
+    if (year) {
+      queryParams['primary_release_year'] = year;
+    }
+    if (startDate) {
+      queryParams['primary_release_date.gte'] = startDate;
+    }
+    if (endDate) {
+      queryParams['primary_release_date.lte'] = endDate;
+    }
+
+    const url = this.getUrl('/discover/movie', queryParams);
+    const res = await this.fetchWithRetry(url);
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(`TMDB authentication error (${res.status}): Invalid or unauthorized API credentials`);
+      }
+      if (res.status === 404) {
+        throw new Error(`TMDB 404: Discover endpoint returned not found`);
+      }
+      if (res.status === 429) {
+        throw new Error(`TMDB 429: Rate limit exceeded`);
+      }
+      if (res.status >= 500) {
+        throw new Error(`TMDB 5xx (${res.status}): Server error ${res.statusText}`);
+      }
+      throw new Error(`TMDB Discover error: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    const results: DiscoveredMovieSummary[] = (data.results || []).map((item: any) => ({
+      source: 'TMDB',
+      sourceMovieId: String(item.id),
+      title: item.title,
+      originalTitle: item.original_title,
+      releaseDate: item.release_date,
+      originalLanguage: item.original_language,
+      popularity: item.popularity,
+      voteAverage: item.vote_average,
+      voteCount: item.vote_count,
+    }));
+
+    return {
+      results,
+      totalPages: data.total_pages || 1,
+      totalResults: data.total_results || results.length,
+    };
+  }
+
   async discoverMovies(
     language: string, // 'te' or 'hi'
     year: number,
     page = 1
   ): Promise<{ results: DiscoveredMovieSummary[]; totalPages: number; totalResults: number }> {
-    if (!this.apiKey && !this.token) {
-      // Return matching movies from canonical historical catalog
-      const pageSize = 20;
-      const matches = HISTORICAL_CATALOG.filter((m) => {
-        const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
-        return m.details.original_language === language && movieYear === year;
-      });
-
-      const totalResults = matches.length;
-      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
-      const startIdx = (page - 1) * pageSize;
-      const pageMatches = matches.slice(startIdx, startIdx + pageSize);
-
-      const results: DiscoveredMovieSummary[] = pageMatches.map((m) => ({
-        source: 'TMDB',
-        sourceMovieId: String(m.details.id),
-        title: m.details.title,
-        originalTitle: m.details.original_title,
-        releaseDate: m.details.release_date,
-        originalLanguage: m.details.original_language,
-        popularity: (m.details.vote_count || 0) / 100,
-        voteAverage: m.details.vote_average,
-        voteCount: m.details.vote_count,
-      }));
-
-      return {
-        results,
-        totalPages,
-        totalResults,
-      };
-    }
-
-    try {
-      const url = this.getUrl('/discover/movie', {
-        with_original_language: language,
-        primary_release_year: year,
-        sort_by: 'popularity.desc',
-        page,
-      });
-
-      const res = await fetch(url, { headers: this.getHeaders() });
-      if (!res.ok) {
-        throw new Error(`TMDB Discover error: ${res.status} ${res.statusText}`);
-      }
-
-      const data = await res.json();
-      const results: DiscoveredMovieSummary[] = (data.results || []).map((item: any) => ({
-        source: 'TMDB',
-        sourceMovieId: String(item.id),
-        title: item.title,
-        originalTitle: item.original_title,
-        releaseDate: item.release_date,
-        originalLanguage: item.original_language,
-        popularity: item.popularity,
-        voteAverage: item.vote_average,
-        voteCount: item.vote_count,
-      }));
-
-      return {
-        results,
-        totalPages: data.total_pages || 1,
-        totalResults: data.total_results || results.length,
-      };
-    } catch {
-      // Graceful fallback to historical catalog
-      const pageSize = 20;
-      const matches = HISTORICAL_CATALOG.filter((m) => {
-        const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
-        return m.details.original_language === language && movieYear === year;
-      });
-
-      const totalResults = matches.length;
-      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
-      const startIdx = (page - 1) * pageSize;
-      const pageMatches = matches.slice(startIdx, startIdx + pageSize);
-
-      const results: DiscoveredMovieSummary[] = pageMatches.map((m) => ({
-        source: 'TMDB',
-        sourceMovieId: String(m.details.id),
-        title: m.details.title,
-        originalTitle: m.details.original_title,
-        releaseDate: m.details.release_date,
-        originalLanguage: m.details.original_language,
-        popularity: (m.details.vote_count || 0) / 100,
-        voteAverage: m.details.vote_average,
-        voteCount: m.details.vote_count,
-      }));
-
-      return {
-        results,
-        totalPages,
-        totalResults,
-      };
-    }
+    return this.discover({ language, year, page });
   }
 
   async getMovieDetails(sourceMovieId: string): Promise<TmdbMovieDetails> {
