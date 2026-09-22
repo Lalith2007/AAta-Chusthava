@@ -83,6 +83,11 @@ export class DailyPuzzleService {
         });
       } catch (createErr: unknown) {
         // Concurrency race fallback: another request already created the puzzle
+        try {
+          await prisma.game.delete({ where: { id: game.id } });
+        } catch {
+          // Ignore deletion error if already removed
+        }
         const existing = await prisma.dailyPuzzle.findUnique({
           where: { puzzleDate },
           include: { game: true },

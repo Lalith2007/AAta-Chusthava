@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '@/infrastructure/db/client';
 import { dailyPuzzleService } from '@/modules/daily/daily-puzzle-service';
 import { gameEngine } from '@/modules/games/game-engine';
@@ -6,9 +6,26 @@ import { challengeService } from '@/modules/challenges/challenge-service';
 import { movieRepository } from '@/modules/movies/movie-repository';
 
 describe('AAta Chusthava Full Stack Domain & API Integration', () => {
+  let createdChallengeId: string | undefined;
+  let createdChallengeGameId: string | undefined;
+
   beforeAll(async () => {
     // Ensure database connection
     await prisma.$queryRaw`SELECT 1`;
+  });
+
+  afterAll(async () => {
+    // Clean up created challenge and associated game
+    if (createdChallengeId) {
+      await prisma.challenge.deleteMany({
+        where: { id: createdChallengeId },
+      });
+    }
+    if (createdChallengeGameId) {
+      await prisma.game.deleteMany({
+        where: { id: createdChallengeGameId },
+      });
+    }
   });
 
   it('verifies daily session generation and strict target privacy', async () => {
@@ -51,6 +68,8 @@ describe('AAta Chusthava Full Stack Domain & API Integration', () => {
       dangal!.id,
       'Tollywood Fan 99'
     );
+    createdChallengeId = challenge.challengeId;
+    createdChallengeGameId = challenge.gameId;
 
     expect(challenge.publicCode).toBeDefined();
     expect(challenge.publicCode.length).toBe(6);

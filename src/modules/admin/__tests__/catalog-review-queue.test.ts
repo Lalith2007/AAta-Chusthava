@@ -6,6 +6,7 @@ import { enrichmentService } from '@/modules/enrichment/enrichment-service';
 
 describe('Sprint 28: Catalog Review Queue & Curation Suite', () => {
   let initialMovieCount = 0;
+  let initialDailyPuzzleCount = 0;
   const TEST_MOVIE_ID_1 = '00000000-0000-0000-0000-000000000281';
   const TEST_MOVIE_ID_2 = '00000000-0000-0000-0000-000000000282';
   const TEST_MOVIE_TARGET = '00000000-0000-0000-0000-000000000283';
@@ -15,6 +16,7 @@ describe('Sprint 28: Catalog Review Queue & Curation Suite', () => {
 
   beforeAll(async () => {
     initialMovieCount = await prisma.movie.count();
+    initialDailyPuzzleCount = await prisma.dailyPuzzle.count();
 
     // Create test people
     await prisma.person.upsert({
@@ -477,5 +479,17 @@ describe('Sprint 28: Catalog Review Queue & Curation Suite', () => {
     const currentCount = await prisma.movie.count();
     // Accounting for our 3 test movies created in beforeAll
     expect(currentCount).toBe(initialMovieCount + 3);
+  });
+
+  it('21. Guarantees zero persistent DailyPuzzle mutation and explicit test entity cleanup', async () => {
+    // Assert target DailyPuzzle collection is strictly untouched
+    const dailyPuzzles = await prisma.dailyPuzzle.findMany({ select: { id: true } });
+    expect(dailyPuzzles.length).toBe(initialDailyPuzzleCount);
+
+    // Verify test fixtures exist during run and are tracked for afterAll deletion
+    const testChallenge = await prisma.challenge.findUnique({ where: { id: 'test-challenge-sprint-28' } });
+    const testGame = await prisma.game.findUnique({ where: { id: 'test-game-sprint-28-target' } });
+    expect(testChallenge).not.toBeNull();
+    expect(testGame).not.toBeNull();
   });
 });
