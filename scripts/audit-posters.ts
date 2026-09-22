@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { resolvePosterUrl } from '../src/lib/poster-utils';
 
