@@ -5,6 +5,7 @@ import { dailyPuzzleService } from '@/modules/daily/daily-puzzle-service';
 import { movieRepository } from '@/modules/movies/movie-repository';
 import { getIndianCalendarDate } from '@/lib/date-utils';
 import { AppError } from '@/domain/errors';
+import { catalogReviewService, ReviewQueueFilterOptions } from './catalog-review-service';
 
 export class AdminService {
   async logAudit(
@@ -17,52 +18,83 @@ export class AdminService {
     reason?: string,
     actorRole = 'SUPER_ADMIN'
   ) {
-    return prisma.auditLog.create({
-      data: {
-        actorId,
-        actorRole,
-        action,
-        entityType,
-        entityId,
-        before,
-        after,
-        reason,
-      },
+    return catalogReviewService.logAudit({
+      actorId,
+      action,
+      entityType,
+      entityId,
+      before,
+      after,
+      reason,
+      actorRole,
     });
   }
 
-  async getReviewQueue(limit = 50) {
+  async getReviewQueue(optionsOrLimit: number | ReviewQueueFilterOptions = 50) {
+    if (typeof optionsOrLimit === 'number') {
+      const candidates = await prisma.ingestionCandidate.findMany({
+        where: {
+          status: { in: ['DISCOVERED', 'PROCESSING', 'FAILED', 'DUPLICATE'] },
+        },
+        orderBy: { discoveredAt: 'desc' },
+        take: optionsOrLimit,
+      });
+
+      const paginatedResult = await catalogReviewService.getReviewQueue({
+        limit: optionsOrLimit,
+      });
+
+      return {
+        candidates,
+        pendingEligibility: paginatedResult.items,
+        total: paginatedResult.total,
+        page: paginatedResult.page,
+        limit: paginatedResult.limit,
+        totalPages: paginatedResult.totalPages,
+      };
+    }
+
+    const paginatedResult = await catalogReviewService.getReviewQueue(optionsOrLimit);
     const candidates = await prisma.ingestionCandidate.findMany({
       where: {
-        status: { in: ['DISCOVERED', 'PROCESSING', 'FAILED'] },
+        status: { in: ['DISCOVERED', 'PROCESSING', 'FAILED', 'DUPLICATE'] },
       },
       orderBy: { discoveredAt: 'desc' },
-      take: limit,
-    });
-
-    const pendingEligibility = await prisma.gameEligibility.findMany({
-      where: {
-        reviewStatus: 'PENDING',
-      },
-      include: {
-        movie: {
-          select: {
-            id: true,
-            primaryTitle: true,
-            releaseYear: true,
-            supportedLanguages: true,
-            posterAsset: true,
-            rating: true,
-          },
-        },
-      },
-      take: limit,
+      take: optionsOrLimit.limit || 20,
     });
 
     return {
       candidates,
-      pendingEligibility,
+      pendingEligibility: paginatedResult.items,
+      total: paginatedResult.total,
+      page: paginatedResult.page,
+      limit: paginatedResult.limit,
+      totalPages: paginatedResult.totalPages,
     };
+  }
+
+  async getReviewDetail(movieId: string) {
+    return catalogReviewService.getReviewDetail(movieId);
+  }
+
+  async getReviewStats() {
+    return catalogReviewService.getReviewStats();
+  }
+
+  async approveMovie(movieId: string, actorId = 'admin', reason?: string) {
+    return catalogReviewService.approveMovie(movieId, actorId, reason);
+  }
+
+  async rejectMovie(movieId: string, reason?: string, actorId = 'admin') {
+    return catalogReviewService.rejectMovie(movieId, reason, actorId);
+  }
+
+  async returnMovieToReview(movieId: string, reason?: string, actorId = 'admin') {
+    return catalogReviewService.returnMovieToReview(movieId, reason, actorId);
+  }
+
+  async enrichSingleMovie(movieId: string, actorId = 'admin') {
+    return catalogReviewService.enrichSingleMovie(movieId, actorId);
   }
 
   async approveCandidate(candidateId: string, actorId = 'admin') {
@@ -113,51 +145,7 @@ export class AdminService {
     actorId = 'admin',
     reason = 'Duplicate entry merge'
   ) {
-    const primary = await prisma.movie.findUnique({ where: { id: primaryMovieId } });
-    const duplicate = await prisma.movie.findUnique({ where: { id: duplicateMovieId } });
-
-    if (!primary || !duplicate) {
-      throw new AppError('MOVIE_NOT_FOUND', 'One or both movies not found for merge.', 404);
-    }
-
-    return prisma.$transaction(async (tx) => {
-      // 1. Re-link Guesses
-      await tx.gameGuess.updateMany({
-        where: { movieId: duplicateMovieId },
-        data: { movieId: primaryMovieId },
-      });
-
-      // 2. Mark duplicate as MERGED / DISABLED
-      await tx.movie.update({
-        where: { id: duplicateMovieId },
-        data: { lifecycleStatus: 'MERGED' },
-      });
-
-      await tx.gameEligibility.update({
-        where: { movieId: duplicateMovieId },
-        data: {
-          playableAsGuess: false,
-          playableAsTarget: false,
-          disabledReason: `Merged into ${primary.primaryTitle} (${primaryMovieId})`,
-        },
-      });
-
-      // 3. Log Audit
-      await tx.auditLog.create({
-        data: {
-          actorId,
-          actorRole: 'SUPER_ADMIN',
-          action: 'MERGE_MOVIES',
-          entityType: 'Movie',
-          entityId: primaryMovieId,
-          before: { duplicateMovieId, title: duplicate.primaryTitle },
-          after: { primaryMovieId, title: primary.primaryTitle },
-          reason,
-        },
-      });
-
-      return { success: true, primaryMovieId, duplicateMovieId };
-    });
+    return catalogReviewService.mergeDuplicateMovie(primaryMovieId, duplicateMovieId, actorId, reason);
   }
 
   async getScheduledPuzzles(limit = 14) {

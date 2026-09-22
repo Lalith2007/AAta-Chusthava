@@ -21,7 +21,8 @@
     "enrich:posters": "npx tsx scripts/enrich-posters.ts",
     "catalog:discover": "npx tsx scripts/run-catalog-discovery.ts",
     "catalog:ingest": "npx tsx scripts/run-catalog-ingestion.ts",
-    "catalog:audit": "npx tsx scripts/audit-catalog-pipeline.ts"
+    "catalog:audit": "npx tsx scripts/audit-catalog-pipeline.ts",
+    "catalog:review": "npx tsx scripts/run-catalog-review.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
