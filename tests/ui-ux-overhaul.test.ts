@@ -52,8 +52,8 @@ describe('Sprint 26A UI/UX Overhaul Test Suite', () => {
       const exactClue: ClueResult = {
         clueType: 'DIRECTOR',
         status: 'EXACT',
-        guessedValue: 'S. S. Rajamouli',
-        targetValue: 'S. S. Rajamouli',
+        direction: 'NONE',
+        matchedValues: ['S. S. Rajamouli'],
         displayValue: 'S. S. Rajamouli',
       };
       expect(exactClue.status).toBe('EXACT');
@@ -64,14 +64,14 @@ describe('Sprint 26A UI/UX Overhaul Test Suite', () => {
         clueType: 'RELEASE_YEAR',
         status: 'CLOSE',
         direction: 'UP',
-        guessedValue: 2015,
+        matchedValues: [],
         displayValue: '2015',
       };
       const closeDownClue: ClueResult = {
         clueType: 'RATING',
         status: 'CLOSE',
         direction: 'DOWN',
-        guessedValue: 8.5,
+        matchedValues: [],
         displayValue: '8.5',
       };
       expect(closeUpClue.direction).toBe('UP');
@@ -82,6 +82,7 @@ describe('Sprint 26A UI/UX Overhaul Test Suite', () => {
       const partialClue: ClueResult = {
         clueType: 'SUPPORTING_CAST',
         status: 'PARTIAL',
+        direction: 'NONE',
         matchedValues: ['Ramya Krishnan', 'Sathyaraj'],
         displayValue: 'Ramya Krishnan, Sathyaraj, Nasser',
       };
@@ -94,7 +95,7 @@ describe('Sprint 26A UI/UX Overhaul Test Suite', () => {
         clueType: 'RELEASE_YEAR',
         status: 'NONE',
         direction: 'UP',
-        guessedValue: 2005,
+        matchedValues: [],
         displayValue: '2005',
       };
       expect(noneClue.status).toBe('NONE');
@@ -105,6 +106,8 @@ describe('Sprint 26A UI/UX Overhaul Test Suite', () => {
       const unavailClue: ClueResult = {
         clueType: 'BOX_OFFICE',
         status: 'UNAVAILABLE',
+        direction: 'NONE',
+        matchedValues: [],
         displayValue: 'N/A',
       };
       expect(unavailClue.status).toBe('UNAVAILABLE');
