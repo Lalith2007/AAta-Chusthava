@@ -29,7 +29,7 @@ function generateSpoilerSafeShareText(
       const status = clues[key]?.status;
       if (status === 'EXACT') row += '🟩';
       else if (status === 'CLOSE') row += '🟨';
-      else if (status === 'PARTIAL') row += '🟧';
+      else if (status === 'PARTIAL') row += '🟪';
       else if (status === 'UNAVAILABLE') row += '⬜';
       else row += '⬛';
     }

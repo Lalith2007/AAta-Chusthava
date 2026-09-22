@@ -1,23 +1,24 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Film, Clapperboard } from 'lucide-react';
+import { Clapperboard } from 'lucide-react';
+import { resolvePosterUrl } from '@/lib/poster-utils';
 
 interface MoviePosterProps {
   src?: string | null;
   alt: string;
   className?: string;
   fallbackInitials?: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'w92' | 'w154' | 'w185' | 'w342' | 'w500';
 }
 
 const GRADIENTS = [
-  'from-amber-600 via-yellow-700 to-amber-900',
-  'from-purple-600 via-indigo-700 to-slate-900',
-  'from-emerald-600 via-teal-700 to-slate-900',
-  'from-rose-600 via-red-700 to-slate-900',
-  'from-blue-600 via-indigo-800 to-slate-900',
-  'from-orange-600 via-amber-700 to-stone-900',
+  'from-amber-700 via-yellow-800 to-slate-950',
+  'from-purple-700 via-indigo-800 to-slate-950',
+  'from-emerald-700 via-teal-800 to-slate-950',
+  'from-rose-700 via-red-800 to-slate-950',
+  'from-blue-700 via-indigo-900 to-slate-950',
+  'from-orange-700 via-amber-800 to-stone-950',
 ];
 
 export default function MoviePoster({
@@ -25,9 +26,11 @@ export default function MoviePoster({
   alt,
   className = '',
   fallbackInitials,
-  size = 'md',
+  size = 'w500',
 }: MoviePosterProps) {
   const [hasError, setHasError] = useState(false);
+
+  const resolvedSrc = resolvePosterUrl(src, size);
 
   // Generate a consistent gradient based on title hash
   const hash = (alt || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -44,7 +47,7 @@ export default function MoviePoster({
       .join('') ||
     '🎬';
 
-  if (!src || hasError) {
+  if (!resolvedSrc || hasError) {
     return (
       <div
         className={`w-full h-full rounded-lg bg-gradient-to-br ${gradient} flex flex-col items-center justify-center p-1.5 text-center select-none shadow-inner border border-white/10 ${className}`}
@@ -61,7 +64,7 @@ export default function MoviePoster({
   return (
     <div className={`relative w-full h-full overflow-hidden rounded-lg bg-slate-900 ${className}`}>
       <img
-        src={src}
+        src={resolvedSrc}
         alt={alt}
         loading="lazy"
         onError={() => setHasError(true)}

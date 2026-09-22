@@ -145,7 +145,7 @@ export default function PlayChallengePage({
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6 pb-12 animate-fade-in">
+    <div className="w-full max-w-[1440px] px-2 sm:px-6 mx-auto space-y-6 pb-12 animate-fade-in">
       {/* Challenge Game Header */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl glass-panel border border-slate-800">
         <div className="flex items-center space-x-3">

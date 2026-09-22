@@ -43,3 +43,4 @@ yarn-error.log*
 /temp
 /scratch
 node_modules
+*.tsbuildinfo
