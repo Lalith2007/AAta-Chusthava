@@ -1,8 +1,95 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter } from '@/infrastructure/external-sources/tmdb-adapter';
-import { posterEnrichmentService } from '../poster-enrichment-service';
-import { resolvePosterUrl, TMDB_IMAGE_BASE_URL } from '@/lib/poster-utils';
+import {
+  posterEnrichmentService,
+  classifyPosterError,
+  sanitizeErrorMessage,
+} from '../poster-enrichment-service';
+import { TMDB_IMAGE_BASE_URL } from '@/lib/poster-utils';
+
+describe('Sprint 26B: TMDB Configuration & Secret Redaction', () => {
+  const originalKey = process.env.TMDB_API_KEY;
+  const originalToken = process.env.TMDB_API_READ_ACCESS_TOKEN;
+
+  afterEach(() => {
+    process.env.TMDB_API_KEY = originalKey;
+    process.env.TMDB_API_READ_ACCESS_TOKEN = originalToken;
+    vi.restoreAllMocks();
+  });
+
+  it('evaluates environment dynamically: missing credentials returns false', () => {
+    delete process.env.TMDB_API_KEY;
+    delete process.env.TMDB_API_READ_ACCESS_TOKEN;
+    expect(tmdbAdapter.isConfigured()).toBe(false);
+  });
+
+  it('evaluates environment dynamically: TMDB_API_KEY returns true', () => {
+    delete process.env.TMDB_API_KEY;
+    delete process.env.TMDB_API_READ_ACCESS_TOKEN;
+    process.env.TMDB_API_KEY = 'mock-api-key';
+    expect(tmdbAdapter.isConfigured()).toBe(true);
+  });
+
+  it('evaluates environment dynamically: TMDB_API_READ_ACCESS_TOKEN returns true', () => {
+    delete process.env.TMDB_API_KEY;
+    delete process.env.TMDB_API_READ_ACCESS_TOKEN;
+    process.env.TMDB_API_READ_ACCESS_TOKEN = 'mock-bearer-token';
+    expect(tmdbAdapter.isConfigured()).toBe(true);
+  });
+
+  it('redacts bearer tokens, api keys, passwords, and database urls from errors', () => {
+    const sensitive =
+      'Failed at https://api.themoviedb.org/3/movie/123?api_key=secret987654 with Bearer eyJhbGciOiJIUzI1NiJ9 and postgresql://user:mysecretpass@localhost:5432/db';
+    const sanitized = sanitizeErrorMessage(sensitive);
+    expect(sanitized).not.toContain('secret987654');
+    expect(sanitized).not.toContain('eyJhbGciOiJIUzI1NiJ9');
+    expect(sanitized).not.toContain('mysecretpass');
+    expect(sanitized).toContain('api_key=[REDACTED]');
+    expect(sanitized).toContain('Bearer [REDACTED]');
+    expect(sanitized).toContain('postgresql://[REDACTED]');
+  });
+
+  it('classifies CONFIG_MISSING error without confusing with NO_POSTER_AVAILABLE', () => {
+    const classified = classifyPosterError(
+      new Error('TMDB configuration missing: TMDB_API_KEY or TMDB_API_READ_ACCESS_TOKEN is not set in environment')
+    );
+    expect(classified.category).toBe('CONFIG_MISSING');
+    expect(classified.safeReason).toBe('TMDB configuration missing (API key/token not set)');
+  });
+
+  it('classifies AUTH_ERROR for 401/403 credentials failures', () => {
+    const classified401 = classifyPosterError(
+      new Error('TMDB authentication error (401): Invalid or unauthorized API credentials')
+    );
+    expect(classified401.category).toBe('AUTH_ERROR');
+
+    const classified403 = classifyPosterError(
+      new Error('TMDB authentication error (403): Invalid or unauthorized API credentials')
+    );
+    expect(classified403.category).toBe('AUTH_ERROR');
+  });
+
+  it('classifies NOT_FOUND_404 for missing movies', () => {
+    const classified = classifyPosterError(new Error('TMDB 404: Movie with ID 999999 not found on TMDB'));
+    expect(classified.category).toBe('NOT_FOUND_404');
+  });
+
+  it('classifies RATE_LIMITED_429 for rate limit responses', () => {
+    const classified = classifyPosterError(new Error('TMDB 429: Rate limit exceeded'));
+    expect(classified.category).toBe('RATE_LIMITED_429');
+  });
+
+  it('classifies SERVER_ERROR_5XX for 500/502/503 responses', () => {
+    const classified = classifyPosterError(new Error('TMDB 5xx (503): Server error Service Unavailable'));
+    expect(classified.category).toBe('SERVER_ERROR_5XX');
+  });
+
+  it('classifies NETWORK_ERROR for connection or timeout errors', () => {
+    const classified = classifyPosterError(new Error('fetch failed: connection timeout ECONNRESET'));
+    expect(classified.category).toBe('NETWORK_ERROR');
+  });
+});
 
 describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
   const TEST_MOVIE_ID_1 = 'poster-enrich-test-1';
@@ -166,7 +253,56 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
     });
   });
 
+  it('explicitly classifies CONFIG_MISSING when credentials are not configured', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(false);
+
+    const result = await posterEnrichmentService.enrichMoviePoster(TEST_MOVIE_ID_1, { dryRun: false });
+
+    expect(result.status).toBe('FAILED');
+    expect(result.failureCategory).toBe('CONFIG_MISSING');
+    expect(result.safeErrorReason).toBe('TMDB configuration missing (API key/token not set)');
+
+    // DB remains unmutated
+    const movie = await prisma.movie.findUnique({ where: { id: TEST_MOVIE_ID_1 } });
+    expect(movie?.posterAsset).toBeNull();
+  });
+
+  it('dry-run performs zero database writes even when poster is found', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
+    vi.spyOn(tmdbAdapter, 'getMovieDetails').mockResolvedValue({
+      id: TEST_TMDB_ID_1,
+      title: 'Test Poster Candidate 1',
+      original_title: 'Test Poster Candidate 1',
+      original_language: 'te',
+      overview: 'Test overview',
+      release_date: '2023-01-01',
+      poster_path: '/real_candidate_poster_123.jpg',
+      genres: [],
+      production_companies: [],
+    });
+
+    const result = await posterEnrichmentService.enrichMoviePoster(TEST_MOVIE_ID_1, { dryRun: true });
+
+    expect(result.status).toBe('ENRICHED');
+    expect(result.newPosterAsset).toBe(`${TMDB_IMAGE_BASE_URL}/w500/real_candidate_poster_123.jpg`);
+
+    // Verify DB was NOT updated during dry run
+    const movie = await prisma.movie.findUnique({ where: { id: TEST_MOVIE_ID_1 } });
+    expect(movie?.posterAsset).toBeNull();
+
+    const raw = await prisma.rawSourceRecord.findUnique({
+      where: {
+        source_sourceRecordId: {
+          source: 'TMDB',
+          sourceRecordId: String(TEST_TMDB_ID_1),
+        },
+      },
+    });
+    expect(raw).toBeNull();
+  });
+
   it('A & D. Enriches candidate movie with real TMDB poster_path and normalizes URL', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
     vi.spyOn(tmdbAdapter, 'getMovieDetails').mockImplementation(async (id: string) => {
       if (id === String(TEST_TMDB_ID_1)) {
         return {
@@ -210,6 +346,7 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
   });
 
   it('B. Preserves existing valid poster and skips mutation (never overwrites)', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
     const tmdbSpy = vi.spyOn(tmdbAdapter, 'getMovieDetails');
 
     const result = await posterEnrichmentService.enrichMoviePoster(TEST_MOVIE_ID_2, { dryRun: false });
@@ -225,6 +362,7 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
   });
 
   it('E. Handles missing poster_path gracefully leaving posterAsset null without fabricating URLs', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
     vi.spyOn(tmdbAdapter, 'getMovieDetails').mockResolvedValue({
       id: TEST_TMDB_ID_3,
       title: 'Test No Poster on TMDB',
@@ -247,12 +385,14 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
   });
 
   it('F. Handles TMDB 404 / lookup failure without corrupting movie record', async () => {
-    vi.spyOn(tmdbAdapter, 'getMovieDetails').mockRejectedValue(new Error('TMDB getMovieDetails error: 404 Not Found'));
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
+    vi.spyOn(tmdbAdapter, 'getMovieDetails').mockRejectedValue(new Error('TMDB 404: Movie with ID 888001 not found on TMDB'));
 
     const result = await posterEnrichmentService.enrichMoviePoster(TEST_MOVIE_ID_1, { dryRun: false });
 
     expect(result.status).toBe('FAILED');
-    expect(result.error).toContain('404');
+    expect(result.failureCategory).toBe('NOT_FOUND_404');
+    expect(result.safeErrorReason).toContain('404');
 
     const movie = await prisma.movie.findUnique({ where: { id: TEST_MOVIE_ID_1 } });
     expect(movie?.posterAsset).toBeNull();
@@ -260,11 +400,12 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
   });
 
   it('G. Retries on transient errors with backoff', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
     let callCount = 0;
     vi.spyOn(tmdbAdapter, 'getMovieDetails').mockImplementation(async () => {
       callCount++;
       if (callCount < 2) {
-        throw new Error('503 Service Unavailable');
+        throw new Error('TMDB 5xx (503): Server error Service Unavailable');
       }
       return {
         id: TEST_TMDB_ID_1,
@@ -290,6 +431,7 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
   });
 
   it('H. Idempotent execution: second run skips already-enriched records', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
     vi.spyOn(tmdbAdapter, 'getMovieDetails').mockResolvedValue({
       id: TEST_TMDB_ID_1,
       title: 'Test Poster Candidate 1',
@@ -313,6 +455,7 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
   });
 
   it('I. Bounded concurrency batch execution with progress reporting', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
     vi.spyOn(tmdbAdapter, 'getMovieDetails').mockImplementation(async (id: string) => {
       return {
         id: Number(id),
@@ -343,6 +486,7 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
   });
 
   it('J. Target Identity Safety: DailyPuzzle and Challenge targetMovieIds remain untouched', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
     vi.spyOn(tmdbAdapter, 'getMovieDetails').mockResolvedValue({
       id: TEST_TMDB_ID_4,
       title: 'Test Target Integrity Movie',

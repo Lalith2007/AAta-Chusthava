@@ -1,5 +1,7 @@
+import 'dotenv/config';
 import { prisma } from '../src/infrastructure/db/client';
 import { posterEnrichmentService } from '../src/modules/enrichment/poster-enrichment-service';
+import { tmdbAdapter } from '../src/infrastructure/external-sources/tmdb-adapter';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -9,12 +11,15 @@ async function main() {
   const concurrencyArg = args.find((a) => a.startsWith('--concurrency='));
   const concurrency = concurrencyArg ? parseInt(concurrencyArg.split('=')[1], 10) : 5;
 
+  const isTmdbConfigured = tmdbAdapter.isConfigured();
+
   console.log('============================================================');
   console.log('AAta CHUSTHAVA — REAL MOVIE POSTER ENRICHMENT PIPELINE');
   console.log('============================================================');
-  console.log(`Mode:        ${dryRun ? 'DRY-RUN (No Database Writes)' : 'LIVE EXECUTION'}`);
-  console.log(`Limit:       ${limit ? limit : 'ALL Candidate Records'}`);
-  console.log(`Concurrency: ${concurrency}`);
+  console.log(`Mode:            ${dryRun ? 'DRY-RUN (No Database Writes)' : 'LIVE EXECUTION'}`);
+  console.log(`Limit:           ${limit ? limit : 'ALL Candidate Records'}`);
+  console.log(`Concurrency:     ${concurrency}`);
+  console.log(`TMDB Configured: ${isTmdbConfigured ? 'YES (Live API Credentials Present)' : 'NO (Credentials Missing - Local .env Empty)'}`);
   console.log('============================================================\n');
 
   const startTime = Date.now();
@@ -38,23 +43,42 @@ async function main() {
   console.log('\n============================================================');
   console.log('POSTER ENRICHMENT SUMMARY REPORT');
   console.log('============================================================');
-  console.log(`Total Active Movies:             ${report.totalActiveMovies}`);
-  console.log(`Total Candidates Identified:     ${report.totalCandidates}`);
-  console.log(`Total Candidates Processed:      ${report.totalProcessed}`);
-  console.log(`Successfully Enriched:           ${report.successfullyEnriched}`);
-  console.log(`Already Had Valid Poster:        ${report.alreadyHadPoster}`);
-  console.log(`No Poster Available on TMDB:     ${report.noPosterAvailable}`);
-  console.log(`Lookup / Network Failures:       ${report.lookupFailures}`);
-  console.log(`Rate-Limited Failures:           ${report.rateLimitedFailures}`);
-  console.log(`Remaining Candidates:            ${report.remainingCandidates}`);
-  console.log(`Execution Duration:              ${durationSec}s`);
+  console.log(`Total Active Movies:                 ${report.totalActiveMovies}`);
+  console.log(`Total Candidates Identified:         ${report.totalCandidates}`);
+  console.log(`Total Candidates Processed:          ${report.totalProcessed}`);
+  console.log(`Successfully Enriched:               ${report.successfullyEnriched}`);
+  console.log(`Already Had Valid Poster:            ${report.alreadyHadPoster}`);
+  console.log(`No Poster Available on TMDB:         ${report.noPosterAvailable}`);
+  console.log(`Lookup / Network Failures:           ${report.lookupFailures}`);
+  console.log(`  - Config Missing (CONFIG_MISSING):         ${report.configMissingFailures}`);
+  console.log(`  - Authentication (AUTH_ERROR):             ${report.authFailures}`);
+  console.log(`  - Not Found (NOT_FOUND_404):               ${report.notFoundFailures}`);
+  console.log(`  - Rate Limited (RATE_LIMITED_429):         ${report.rateLimitedFailures}`);
+  console.log(`  - Server Error (SERVER_ERROR_5XX):         ${report.serverErrorFailures}`);
+  console.log(`  - Network Error (NETWORK_ERROR):           ${report.networkFailures}`);
+  console.log(`Remaining Candidates:                ${report.remainingCandidates}`);
+  console.log(`Execution Duration:                  ${durationSec}s`);
   console.log('============================================================\n');
 
   if (report.results.length > 0) {
-    console.log('--- SAMPLE ENRICHED RECORDS ---');
     const enrichedSamples = report.results.filter((r) => r.status === 'ENRICHED').slice(0, 10);
-    for (const r of enrichedSamples) {
-      console.log(`[ENRICHED] ${r.title} (${r.releaseYear}) -> ${r.newPosterAsset}`);
+    if (enrichedSamples.length > 0) {
+      console.log('--- SAMPLE ENRICHED RECORDS ---');
+      for (const r of enrichedSamples) {
+        console.log(`[ENRICHED] ${r.title} (${r.releaseYear}) -> ${r.newPosterAsset}`);
+      }
+      console.log('');
+    }
+
+    const failedSamples = report.results.filter((r) => r.status === 'FAILED').slice(0, 10);
+    if (failedSamples.length > 0) {
+      console.log('--- SAMPLE FAILED RECORDS ---');
+      for (const r of failedSamples) {
+        console.log(
+          `[FAILED - ${r.failureCategory || 'UNKNOWN'}] ${r.title} (tmdbId: ${r.tmdbId}) -> ${r.safeErrorReason || r.error}`
+        );
+      }
+      console.log('');
     }
   }
 }
@@ -69,3 +93,4 @@ if (require.main === module) {
       await prisma.$disconnect();
     });
 }
+

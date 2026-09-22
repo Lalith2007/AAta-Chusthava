@@ -2,6 +2,96 @@ import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter, TmdbMovieDetails } from '@/infrastructure/external-sources/tmdb-adapter';
 import { resolvePosterUrl } from '@/lib/poster-utils';
 
+export type PosterFailureCategory =
+  | 'CONFIG_MISSING'
+  | 'AUTH_ERROR'
+  | 'NOT_FOUND_404'
+  | 'RATE_LIMITED_429'
+  | 'SERVER_ERROR_5XX'
+  | 'NETWORK_ERROR'
+  | 'UNKNOWN_ERROR';
+
+export function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/Bearer\s+([A-Za-z0-9\-._~+/]+=*)/gi, 'Bearer [REDACTED]')
+    .replace(/(api_key|token|access_token|key|secret|password)=([^&\s]+)/gi, '$1=[REDACTED]')
+    .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, 'postgresql://[REDACTED]')
+    .replace(/Authorization:\s*[^\n\r]+/gi, 'Authorization: [REDACTED]');
+}
+
+export function classifyPosterError(error: unknown): {
+  category: PosterFailureCategory;
+  safeReason: string;
+} {
+  const rawMsg = sanitizeErrorMessage(error instanceof Error ? error.message : String(error || ''));
+
+  if (
+    rawMsg.includes('configuration missing') ||
+    rawMsg.includes('not set') ||
+    rawMsg.includes('not configured')
+  ) {
+    return {
+      category: 'CONFIG_MISSING',
+      safeReason: 'TMDB configuration missing (API key/token not set)',
+    };
+  }
+
+  if (
+    rawMsg.includes('authentication') ||
+    rawMsg.includes('unauthorized') ||
+    rawMsg.includes('401') ||
+    rawMsg.includes('403')
+  ) {
+    return {
+      category: 'AUTH_ERROR',
+      safeReason: 'TMDB authentication failed (invalid or unauthorized credentials)',
+    };
+  }
+
+  if (
+    rawMsg.includes('404') ||
+    rawMsg.includes('not found on TMDB') ||
+    rawMsg.includes('not found in historical catalog')
+  ) {
+    return {
+      category: 'NOT_FOUND_404',
+      safeReason: 'TMDB 404 (Movie not found)',
+    };
+  }
+
+  if (rawMsg.includes('429') || rawMsg.includes('Rate limit')) {
+    return {
+      category: 'RATE_LIMITED_429',
+      safeReason: 'TMDB 429 (Rate limit exceeded)',
+    };
+  }
+
+  if (/5\d{2}/.test(rawMsg) || rawMsg.includes('Server error')) {
+    return {
+      category: 'SERVER_ERROR_5XX',
+      safeReason: 'TMDB 5xx (Server error)',
+    };
+  }
+
+  if (
+    rawMsg.includes('fetch') ||
+    rawMsg.includes('timeout') ||
+    rawMsg.includes('ECONN') ||
+    rawMsg.includes('network') ||
+    rawMsg.includes('AbortError')
+  ) {
+    return {
+      category: 'NETWORK_ERROR',
+      safeReason: 'Network timeout / connection error',
+    };
+  }
+
+  return {
+    category: 'UNKNOWN_ERROR',
+    safeReason: rawMsg.slice(0, 100) || 'Unknown lookup error',
+  };
+}
+
 export interface PosterEnrichmentOptions {
   dryRun?: boolean;
   limit?: number;
@@ -28,6 +118,8 @@ export interface PosterEnrichmentResult {
   previousPosterAsset: string | null;
   newPosterAsset: string | null;
   rawPosterPath?: string | null;
+  failureCategory?: PosterFailureCategory;
+  safeErrorReason?: string;
   error?: string;
 }
 
@@ -39,7 +131,12 @@ export interface PosterEnrichmentSummaryReport {
   successfullyEnriched: number;
   noPosterAvailable: number;
   lookupFailures: number;
+  configMissingFailures: number;
+  authFailures: number;
+  notFoundFailures: number;
   rateLimitedFailures: number;
+  serverErrorFailures: number;
+  networkFailures: number;
   remainingCandidates: number;
   results: PosterEnrichmentResult[];
 }
@@ -57,6 +154,12 @@ export class PosterEnrichmentService {
     maxRetries = this.defaultMaxRetries,
     baseDelayMs = this.defaultRetryDelayMs
   ): Promise<TmdbMovieDetails> {
+    if (!tmdbAdapter.isConfigured()) {
+      throw new Error(
+        'TMDB configuration missing: TMDB_API_KEY or TMDB_API_READ_ACCESS_TOKEN is not set in environment'
+      );
+    }
+
     let lastError: any = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -80,7 +183,7 @@ export class PosterEnrichmentService {
           continue;
         }
 
-        // For non-retryable errors (e.g. 404), break immediately
+        // For non-retryable errors (e.g. 404, auth error, config missing), break immediately
         break;
       }
     }
@@ -218,7 +321,8 @@ export class PosterEnrichmentService {
           rawPosterPath,
         };
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const { category, safeReason } = classifyPosterError(err);
       return {
         movieId: movie.id,
         tmdbId: movie.tmdbId,
@@ -227,7 +331,9 @@ export class PosterEnrichmentService {
         status: 'FAILED',
         previousPosterAsset,
         newPosterAsset: null,
-        error: err?.message || String(err),
+        failureCategory: category,
+        safeErrorReason: safeReason,
+        error: safeReason,
       };
     }
   }
@@ -272,7 +378,12 @@ export class PosterEnrichmentService {
     let successfullyEnriched = 0;
     let noPosterAvailable = 0;
     let lookupFailures = 0;
+    let configMissingFailures = 0;
+    let authFailures = 0;
+    let notFoundFailures = 0;
     let rateLimitedFailures = 0;
+    let serverErrorFailures = 0;
+    let networkFailures = 0;
     let alreadyHadPoster = 0;
 
     // Process in chunks with bounded concurrency
@@ -292,7 +403,12 @@ export class PosterEnrichmentService {
           else if (res.status === 'ALREADY_HAD_POSTER') alreadyHadPoster++;
           else if (res.status === 'FAILED') {
             lookupFailures++;
-            if (res.error?.includes('429')) rateLimitedFailures++;
+            if (res.failureCategory === 'CONFIG_MISSING') configMissingFailures++;
+            else if (res.failureCategory === 'AUTH_ERROR') authFailures++;
+            else if (res.failureCategory === 'NOT_FOUND_404') notFoundFailures++;
+            else if (res.failureCategory === 'RATE_LIMITED_429') rateLimitedFailures++;
+            else if (res.failureCategory === 'SERVER_ERROR_5XX') serverErrorFailures++;
+            else if (res.failureCategory === 'NETWORK_ERROR') networkFailures++;
           }
 
           if (options.onProgress) {
@@ -328,7 +444,12 @@ export class PosterEnrichmentService {
       successfullyEnriched,
       noPosterAvailable,
       lookupFailures,
+      configMissingFailures,
+      authFailures,
+      notFoundFailures,
       rateLimitedFailures,
+      serverErrorFailures,
+      networkFailures,
       remainingCandidates: Math.max(0, remainingCandidates),
       results,
     };

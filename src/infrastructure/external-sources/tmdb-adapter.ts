@@ -67,13 +67,18 @@ export interface MovieDataSource {
 import { HISTORICAL_CATALOG, HistoricalMovieRecord } from './historical-catalog-data';
 
 export class TmdbAdapter implements MovieDataSource {
-  private apiKey: string;
-  private token: string;
   private baseUrl = 'https://api.themoviedb.org/3';
 
-  constructor() {
-    this.apiKey = process.env.TMDB_API_KEY || '';
-    this.token = process.env.TMDB_API_READ_ACCESS_TOKEN || '';
+  private get apiKey(): string {
+    return process.env.TMDB_API_KEY?.trim() || '';
+  }
+
+  private get token(): string {
+    return process.env.TMDB_API_READ_ACCESS_TOKEN?.trim() || '';
+  }
+
+  public isConfigured(): boolean {
+    return Boolean(this.apiKey || this.token);
   }
 
   private getHeaders(): HeadersInit {
@@ -201,51 +206,81 @@ export class TmdbAdapter implements MovieDataSource {
   }
 
   async getMovieDetails(sourceMovieId: string): Promise<TmdbMovieDetails> {
+    const historicalRecord = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+    if (historicalRecord) return historicalRecord.details;
+
     if (!this.apiKey && !this.token) {
-      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
-      if (record) return record.details;
-      throw new Error(`Movie with source ID ${sourceMovieId} not found in historical catalog`);
+      throw new Error(
+        `TMDB configuration missing: TMDB_API_KEY or TMDB_API_READ_ACCESS_TOKEN is not set in environment, and movie ID ${sourceMovieId} was not found in historical catalog`
+      );
     }
 
     try {
       const url = this.getUrl(`/movie/${sourceMovieId}`);
       const res = await fetch(url, { headers: this.getHeaders() });
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error(`TMDB authentication error (${res.status}): Invalid or unauthorized API credentials`);
+        }
+        if (res.status === 404) {
+          throw new Error(`TMDB 404: Movie with ID ${sourceMovieId} not found on TMDB`);
+        }
+        if (res.status === 429) {
+          throw new Error(`TMDB 429: Rate limit exceeded`);
+        }
+        if (res.status >= 500) {
+          throw new Error(`TMDB 5xx (${res.status}): Server error ${res.statusText}`);
+        }
         throw new Error(`TMDB getMovieDetails error: ${res.status} ${res.statusText}`);
       }
       return res.json();
-    } catch (err) {
-      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
-      if (record) return record.details;
+    } catch (err: any) {
       throw err;
     }
   }
 
   async getCredits(sourceMovieId: string): Promise<TmdbCredits> {
+    const historicalRecord = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+    if (historicalRecord) return historicalRecord.credits;
+
     if (!this.apiKey && !this.token) {
-      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
-      if (record) return record.credits;
-      throw new Error(`Credits for source ID ${sourceMovieId} not found in historical catalog`);
+      throw new Error(
+        `TMDB configuration missing: TMDB_API_KEY or TMDB_API_READ_ACCESS_TOKEN is not set in environment, and credits for movie ID ${sourceMovieId} were not found in historical catalog`
+      );
     }
 
     try {
       const url = this.getUrl(`/movie/${sourceMovieId}/credits`);
       const res = await fetch(url, { headers: this.getHeaders() });
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error(`TMDB authentication error (${res.status}): Invalid or unauthorized API credentials`);
+        }
+        if (res.status === 404) {
+          throw new Error(`TMDB 404: Credits for movie ID ${sourceMovieId} not found on TMDB`);
+        }
+        if (res.status === 429) {
+          throw new Error(`TMDB 429: Rate limit exceeded`);
+        }
+        if (res.status >= 500) {
+          throw new Error(`TMDB 5xx (${res.status}): Server error ${res.statusText}`);
+        }
         throw new Error(`TMDB getCredits error: ${res.status} ${res.statusText}`);
       }
       return res.json();
-    } catch (err) {
-      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
-      if (record) return record.credits;
+    } catch (err: any) {
       throw err;
     }
   }
 
   async getAlternativeTitles(sourceMovieId: string): Promise<string[]> {
+    const historicalRecord = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
+    if (historicalRecord) {
+      return historicalRecord.alternativeTitles || [];
+    }
+
     if (!this.apiKey && !this.token) {
-      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
-      return record?.alternativeTitles || [];
+      return [];
     }
 
     try {
@@ -255,8 +290,7 @@ export class TmdbAdapter implements MovieDataSource {
       const data = await res.json();
       return (data.titles || []).map((t: any) => t.title);
     } catch {
-      const record = HISTORICAL_CATALOG.find((m) => String(m.details.id) === sourceMovieId);
-      return record?.alternativeTitles || [];
+      return [];
     }
   }
 }
