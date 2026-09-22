@@ -437,6 +437,11 @@ describe('Sprint 28: Catalog Review Queue & Curation Suite', () => {
   // --------------------------------------------------------------------------
 
   it('17. Executes batch review operations in dry-run mode with zero database writes', async () => {
+    await prisma.gameEligibility.update({
+      where: { movieId: TEST_MOVIE_ID_1 },
+      data: { reviewStatus: 'PENDING' },
+    });
+
     const countBefore = await prisma.gameEligibility.count({ where: { reviewStatus: 'APPROVED' } });
 
     const report = await catalogReviewService.batchProcessEligibleMovies({
