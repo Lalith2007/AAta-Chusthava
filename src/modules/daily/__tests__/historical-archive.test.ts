@@ -12,16 +12,30 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
   const TEST_NONEXISTENT_PAST_DATE = '2021-11-20';
   const ALL_TEST_DATES = [TEST_PAST_DATE_1, TEST_PAST_DATE_2, TEST_NONEXISTENT_PAST_DATE];
 
-  beforeEach(async () => {
-    await prisma.dailyPuzzle.deleteMany({
+  const cleanArchivePuzzles = async () => {
+    const testPuzzles = await prisma.dailyPuzzle.findMany({
       where: { puzzleDate: { in: ALL_TEST_DATES } },
+      select: { id: true, gameId: true },
     });
+    const gameIds = testPuzzles.map((p) => p.gameId);
+    if (testPuzzles.length > 0) {
+      await prisma.dailyPuzzle.deleteMany({
+        where: { id: { in: testPuzzles.map((p) => p.id) } },
+      });
+    }
+    if (gameIds.length > 0) {
+      await prisma.game.deleteMany({
+        where: { id: { in: gameIds } },
+      });
+    }
+  };
+
+  beforeEach(async () => {
+    await cleanArchivePuzzles();
   });
 
   afterEach(async () => {
-    await prisma.dailyPuzzle.deleteMany({
-      where: { puzzleDate: { in: ALL_TEST_DATES } },
-    });
+    await cleanArchivePuzzles();
     vi.restoreAllMocks();
   });
 
@@ -241,9 +255,18 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
       const pastDate = subtractDaysFromPuzzleDate(todayIST, 10);
 
       // Clean up test dates if already existing
-      await prisma.dailyPuzzle.deleteMany({
+      const existingTestPuzzles = await prisma.dailyPuzzle.findMany({
         where: { puzzleDate: { in: [pastDate, tomorrowIST] } },
+        select: { id: true, gameId: true },
       });
+      if (existingTestPuzzles.length > 0) {
+        await prisma.dailyPuzzle.deleteMany({
+          where: { id: { in: existingTestPuzzles.map((p) => p.id) } },
+        });
+        await prisma.game.deleteMany({
+          where: { id: { in: existingTestPuzzles.map((p) => p.gameId) } },
+        });
+      }
 
       const movie = await prisma.movie.findFirst({
         where: { lifecycleStatus: 'ACTIVE', eligibility: { playableAsTarget: true } },
@@ -277,21 +300,30 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
         },
       });
 
-      // Fetch archive list
-      const archives = await dailyPuzzleService.getArchivePuzzles(60);
+      try {
+        // Fetch archive list
+        const archives = await dailyPuzzleService.getArchivePuzzles(60);
 
-      // Past date MUST be in list
-      expect(archives.some((a) => a.puzzleDate === pastDate)).toBe(true);
+        // Past date MUST be in list
+        expect(archives.some((a) => a.puzzleDate === pastDate)).toBe(true);
 
-      // Today and Future dates MUST NOT be in archive list
-      expect(archives.some((a) => a.puzzleDate === todayIST)).toBe(false);
-      expect(archives.some((a) => a.puzzleDate === tomorrowIST)).toBe(false);
+        // Today and Future dates MUST NOT be in archive list
+        expect(archives.some((a) => a.puzzleDate === todayIST)).toBe(false);
+        expect(archives.some((a) => a.puzzleDate === tomorrowIST)).toBe(false);
 
-      // Verify ZERO target metadata in serialized archive listing
-      const serialized = JSON.stringify(archives);
-      expect(serialized).not.toContain(movie!.id);
-      expect(serialized).not.toContain(movie!.primaryTitle);
-      expect(serialized).not.toContain('selectionMetadata');
+        // Verify ZERO target metadata in serialized archive listing
+        const serialized = JSON.stringify(archives);
+        expect(serialized).not.toContain(movie!.id);
+        expect(serialized).not.toContain(movie!.primaryTitle);
+        expect(serialized).not.toContain('selectionMetadata');
+      } finally {
+        await prisma.dailyPuzzle.deleteMany({
+          where: { puzzleDate: { in: [pastDate, tomorrowIST] } },
+        });
+        await prisma.game.deleteMany({
+          where: { id: { in: [pastGame.id, futureGame.id] } },
+        });
+      }
     });
   });
 
@@ -300,34 +332,50 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
   // =========================================================================
   describe('5. Daily Gameplay Regressions (Confirm Daily Creation Remains Intact)', () => {
     it('verifies that getDailySession continues to dynamically create today puzzle via selection engine', async () => {
-      const todayIST = getIndianCalendarDate(new Date());
+      const testDate = '2045-05-15';
 
-      // Ensure today puzzle is clean
-      await prisma.dailyPuzzle.deleteMany({
-        where: { puzzleDate: todayIST },
+      // Ensure test puzzle is clean
+      const existing = await prisma.dailyPuzzle.findUnique({
+        where: { puzzleDate: testDate },
+        select: { id: true, gameId: true },
       });
+      if (existing) {
+        await prisma.dailyPuzzle.delete({ where: { id: existing.id } });
+        await prisma.game.delete({ where: { id: existing.gameId } });
+      }
 
       const selectorSpy = vi.spyOn(dailyPuzzleSelector, 'selectDailyTarget');
 
-      const session = await dailyPuzzleService.getDailySession(todayIST, {
-        anonymousPlayerId: 'daily_regression_tester',
-      });
+      try {
+        const session = await dailyPuzzleService.getDailySession(testDate, {
+          anonymousPlayerId: 'daily_regression_tester',
+        });
 
-      expect(session.sessionId).toBeDefined();
-      expect(session.mode).toBe('DAILY');
-      expect(session.maxAttempts).toBe(10);
-      expect(session.isCompleted).toBe(false);
-      expect(session.revealedTarget).toBeNull();
+        expect(session.sessionId).toBeDefined();
+        expect(session.mode).toBe('DAILY');
+        expect(session.maxAttempts).toBe(10);
+        expect(session.isCompleted).toBe(false);
+        expect(session.revealedTarget).toBeNull();
 
-      // Selector WAS called for Daily
-      expect(selectorSpy).toHaveBeenCalledWith(todayIST);
+        // Selector WAS called for Daily
+        expect(selectorSpy).toHaveBeenCalledWith(testDate);
 
-      // DailyPuzzle row exists in DB
-      const createdPuzzle = await prisma.dailyPuzzle.findUnique({
-        where: { puzzleDate: todayIST },
-      });
-      expect(createdPuzzle).not.toBeNull();
-      expect(createdPuzzle!.status).toBe('ACTIVE');
+        // DailyPuzzle row exists in DB
+        const createdPuzzle = await prisma.dailyPuzzle.findUnique({
+          where: { puzzleDate: testDate },
+        });
+        expect(createdPuzzle).not.toBeNull();
+        expect(createdPuzzle!.status).toBe('ACTIVE');
+      } finally {
+        const createdPuzzle = await prisma.dailyPuzzle.findUnique({
+          where: { puzzleDate: testDate },
+          select: { id: true, gameId: true },
+        });
+        if (createdPuzzle) {
+          await prisma.dailyPuzzle.delete({ where: { id: createdPuzzle.id } });
+          await prisma.game.delete({ where: { id: createdPuzzle.gameId } });
+        }
+      }
     });
   });
 });

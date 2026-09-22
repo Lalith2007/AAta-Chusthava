@@ -13,22 +13,32 @@ describe('Deterministic Daily Puzzle Engine (DAILY_SELECTION_V1)', () => {
   const TEST_DATE_1 = '2030-01-01';
   const TEST_DATE_2 = '2030-01-02';
   const TEST_DATE_3 = '2030-01-03';
+  const BASE_TEST_DATES = [TEST_DATE_1, TEST_DATE_2, TEST_DATE_3, '2030-01-04', '2030-01-05'];
+
+  const cleanPuzzlesAndGames = async (dates: string[]) => {
+    const puzzles = await prisma.dailyPuzzle.findMany({
+      where: { puzzleDate: { in: dates } },
+      select: { id: true, gameId: true },
+    });
+    const gameIds = puzzles.map((p) => p.gameId);
+    if (puzzles.length > 0) {
+      await prisma.dailyPuzzle.deleteMany({
+        where: { id: { in: puzzles.map((p) => p.id) } },
+      });
+    }
+    if (gameIds.length > 0) {
+      await prisma.game.deleteMany({
+        where: { id: { in: gameIds } },
+      });
+    }
+  };
 
   beforeEach(async () => {
-    // Clean up any test DailyPuzzle records
-    await prisma.dailyPuzzle.deleteMany({
-      where: {
-        puzzleDate: { in: [TEST_DATE_1, TEST_DATE_2, TEST_DATE_3, '2030-01-04', '2030-01-05'] },
-      },
-    });
+    await cleanPuzzlesAndGames(BASE_TEST_DATES);
   });
 
   afterEach(async () => {
-    await prisma.dailyPuzzle.deleteMany({
-      where: {
-        puzzleDate: { in: [TEST_DATE_1, TEST_DATE_2, TEST_DATE_3, '2030-01-04', '2030-01-05'] },
-      },
-    });
+    await cleanPuzzlesAndGames(BASE_TEST_DATES);
   });
 
   // 1. TIMEZONE & DATE UTILITIES
@@ -204,9 +214,7 @@ describe('Deterministic Daily Puzzle Engine (DAILY_SELECTION_V1)', () => {
       }
 
       // 1. Clean up any existing test rows
-      await prisma.dailyPuzzle.deleteMany({
-        where: { puzzleDate: { in: seqDates } },
-      });
+      await cleanPuzzlesAndGames(seqDates);
 
       try {
         // 2. Schedule and persist day-by-day sequentially
@@ -261,10 +269,8 @@ describe('Deterministic Daily Puzzle Engine (DAILY_SELECTION_V1)', () => {
         });
         expect(afterCount).toBe(14);
       } finally {
-        // Cleanup isolated test-date rows
-        await prisma.dailyPuzzle.deleteMany({
-          where: { puzzleDate: { in: seqDates } },
-        });
+        // Cleanup isolated test-date rows and associated games
+        await cleanPuzzlesAndGames(seqDates);
       }
     });
   });

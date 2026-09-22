@@ -20,6 +20,7 @@ import {
   History,
   Sparkles,
 } from 'lucide-react';
+import { ReviewQueueView } from '@/components/admin/ReviewQueueView';
 
 type Tab = 'overview' | 'review' | 'movies' | 'puzzles' | 'audit';
 
@@ -354,52 +355,8 @@ export default function AdminPage() {
 
       {/* TAB 2: REVIEW QUEUE */}
       {activeTab === 'review' && (
-        <div className="space-y-4">
-          <h2 className="text-base font-bold text-white">
-            Ingestion Candidates & Pending Metadata Review
-          </h2>
-          {reviewQueue?.candidates?.length === 0 ? (
-            <div className="p-8 text-center glass-card rounded-2xl border border-slate-800 text-xs text-slate-400">
-              No pending candidates requiring review in the ingestion queue.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {reviewQueue?.candidates?.map((c: any) => (
-                <div
-                  key={c.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl glass-card border border-slate-800 gap-3"
-                >
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-slate-200">
-                        {c.source} ID: {c.sourceMovieId}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-amber-400">
-                        {c.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">{c.discoveryReason}</p>
-                    {c.error && <p className="text-[11px] text-red-400 mt-0.5">{c.error}</p>}
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleReviewAction(c.id, 'APPROVE')}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-                    >
-                      Approve / Process
-                    </button>
-                    <button
-                      onClick={() => handleReviewAction(c.id, 'REJECT')}
-                      className="px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white font-bold text-xs"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="space-y-6">
+          <ReviewQueueView />
         </div>
       )}
 

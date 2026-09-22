@@ -19,18 +19,42 @@ describe('PR #22 Security Hardening: Admin Authorization & Secret Management', (
     process.env.ADMIN_API_SECRET = VALID_ADMIN_SECRET;
     process.env.DAILY_PUZZLE_SECRET = TEST_SECRET;
 
-    await prisma.dailyPuzzle.deleteMany({
+    const testPuzzles = await prisma.dailyPuzzle.findMany({
       where: { puzzleDate: TEST_DATE },
+      select: { id: true, gameId: true },
     });
+    const gameIds = testPuzzles.map((p) => p.gameId);
+    if (testPuzzles.length > 0) {
+      await prisma.dailyPuzzle.deleteMany({
+        where: { id: { in: testPuzzles.map((p) => p.id) } },
+      });
+    }
+    if (gameIds.length > 0) {
+      await prisma.game.deleteMany({
+        where: { id: { in: gameIds } },
+      });
+    }
     await prisma.auditLog.deleteMany({
       where: { entityId: TEST_DATE },
     });
   });
 
   afterEach(async () => {
-    await prisma.dailyPuzzle.deleteMany({
+    const testPuzzles = await prisma.dailyPuzzle.findMany({
       where: { puzzleDate: TEST_DATE },
+      select: { id: true, gameId: true },
     });
+    const gameIds = testPuzzles.map((p) => p.gameId);
+    if (testPuzzles.length > 0) {
+      await prisma.dailyPuzzle.deleteMany({
+        where: { id: { in: testPuzzles.map((p) => p.id) } },
+      });
+    }
+    if (gameIds.length > 0) {
+      await prisma.game.deleteMany({
+        where: { id: { in: gameIds } },
+      });
+    }
     await prisma.auditLog.deleteMany({
       where: { entityId: TEST_DATE },
     });

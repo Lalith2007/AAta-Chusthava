@@ -15,16 +15,30 @@ describe('Sprint 23: Daily Game Lifecycle, 10-Attempt Rule, Hints & Secrecy Regr
     '2024-02-14',
   ];
 
-  beforeEach(async () => {
-    await prisma.dailyPuzzle.deleteMany({
+  const cleanPuzzlesAndGames = async () => {
+    const testPuzzles = await prisma.dailyPuzzle.findMany({
       where: { puzzleDate: { in: TEST_DATES } },
+      select: { id: true, gameId: true },
     });
+    const gameIds = testPuzzles.map((p) => p.gameId);
+    if (testPuzzles.length > 0) {
+      await prisma.dailyPuzzle.deleteMany({
+        where: { id: { in: testPuzzles.map((p) => p.id) } },
+      });
+    }
+    if (gameIds.length > 0) {
+      await prisma.game.deleteMany({
+        where: { id: { in: gameIds } },
+      });
+    }
+  };
+
+  beforeEach(async () => {
+    await cleanPuzzlesAndGames();
   });
 
   afterEach(async () => {
-    await prisma.dailyPuzzle.deleteMany({
-      where: { puzzleDate: { in: TEST_DATES } },
-    });
+    await cleanPuzzlesAndGames();
   });
 
   // 1. CRITICAL FIX #1 & FIX #5: 10-ATTEMPT RULE & WIN/LOSS STATE MACHINE

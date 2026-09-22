@@ -16,6 +16,8 @@ export type ErrorCode =
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
   | 'VALIDATION_ERROR'
+  | 'TARGET_IMMUTABILITY_VIOLATION'
+  | 'INVALID_MERGE'
   | 'INTERNAL_ERROR';
 
 export class AppError extends Error {
