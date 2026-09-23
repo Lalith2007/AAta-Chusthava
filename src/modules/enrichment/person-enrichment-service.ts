@@ -1,6 +1,7 @@
 import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter } from '@/infrastructure/external-sources/tmdb-adapter';
 import { resolvePosterUrl } from '@/lib/poster-utils';
+import { mediaIdentityValidator } from './media-identity-validator';
 
 export interface PersonEnrichmentOptions {
   dryRun?: boolean;
@@ -114,7 +115,9 @@ export class PersonEnrichmentService {
       const rawProfilePath = details?.profile_path?.trim() || null;
       const normalizedUrl = resolvePosterUrl(rawProfilePath, 'w185');
 
-      if (rawProfilePath && normalizedUrl) {
+      const urlCheck = mediaIdentityValidator.validateImageUrl(normalizedUrl);
+
+      if (rawProfilePath && normalizedUrl && urlCheck.isValid) {
         if (!options.dryRun) {
           await prisma.person.update({
             where: { id: person.id },
@@ -140,6 +143,7 @@ export class PersonEnrichmentService {
           previousImage,
           newImage: null,
           rawProfilePath,
+          error: urlCheck.reason,
         };
       }
     } catch (err: unknown) {

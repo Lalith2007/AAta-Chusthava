@@ -7,8 +7,9 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') || '20', 10);
     const search = searchParams.get('search') || undefined;
+    const targetOnly = searchParams.get('targetOnly') === 'true';
 
-    const data = await posterReviewService.getPosterReviewQueue({ page, pageSize, search });
+    const data = await posterReviewService.getPosterReviewQueue({ page, pageSize, search, targetOnly });
     return NextResponse.json(data);
   } catch (err: any) {
     return NextResponse.json(
@@ -25,6 +26,11 @@ export async function POST(request: NextRequest) {
 
     if (!movieId) {
       return NextResponse.json({ error: 'movieId is required' }, { status: 400 });
+    }
+
+    if (action === 'discover') {
+      const result = await posterReviewService.discoverCandidate(movieId);
+      return NextResponse.json(result);
     }
 
     if (action === 'approve' || action === 'submitManual') {

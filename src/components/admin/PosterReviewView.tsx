@@ -14,6 +14,8 @@ interface PosterReviewItem {
   currentPosterAsset: string | null;
   candidatePosterUrl: string | null;
   candidateSource: string | null;
+  googleSearchUrl: string;
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW' | 'REJECTED_CONFLICT';
   directors: string[];
   leadCast: string[];
 }
@@ -25,6 +27,7 @@ export default function PosterReviewView() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [targetOnly, setTargetOnly] = useState(false);
   const [manualUrls, setManualUrls] = useState<Record<string, string>>({});
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -36,6 +39,7 @@ export default function PosterReviewView() {
         page: String(page),
         pageSize: '15',
         ...(search ? { search } : {}),
+        ...(targetOnly ? { targetOnly: 'true' } : {}),
       });
       const res = await fetch(`/api/admin/media/poster-review?${params}`);
       if (res.ok) {
@@ -49,7 +53,7 @@ export default function PosterReviewView() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, targetOnly]);
 
   useEffect(() => {
     fetchQueue();
@@ -140,8 +144,23 @@ export default function PosterReviewView() {
           </p>
         </div>
 
-        {/* Search */}
-        <div className="flex items-center space-x-2">
+        {/* Filter & Search */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Target-Only Filter Toggle */}
+          <button
+            onClick={() => {
+              setTargetOnly(!targetOnly);
+              setPage(1);
+            }}
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-colors ${
+              targetOnly
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {targetOnly ? '★ Target-Playable Only' : 'All Movies'}
+          </button>
+
           <div className="relative">
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
             <input
@@ -184,11 +203,12 @@ export default function PosterReviewView() {
         <div className="space-y-3">
           {items.map((item) => {
             const isProcessing = actionInProgress === item.id;
+            const currentManualUrl = manualUrls[item.id]?.trim();
 
             return (
               <div
                 key={item.id}
-                className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
               >
                 {/* Left: Movie Info */}
                 <div className="flex items-start space-x-3 min-w-0 flex-1">
@@ -204,6 +224,19 @@ export default function PosterReviewView() {
                       <span className="text-xs px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 font-bold border border-amber-500/30">
                         {item.releaseYear}
                       </span>
+                      {item.confidence && (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                            item.confidence === 'HIGH'
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : item.confidence === 'MEDIUM'
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                              : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          }`}
+                        >
+                          {item.confidence}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-1">
@@ -225,9 +258,36 @@ export default function PosterReviewView() {
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex flex-col sm:flex-row items-center gap-2 flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                  {/* Google Search Direct Link */}
+                  {item.googleSearchUrl && (
+                    <a
+                      href={item.googleSearchUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1.5 text-xs rounded-xl bg-blue-950/60 hover:bg-blue-900/60 text-blue-300 border border-blue-800/60 transition-colors flex items-center space-x-1"
+                      title="Search Google for poster"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Search Google</span>
+                    </a>
+                  )}
+
                   {/* Enter Manual URL */}
-                  <div className="flex items-center space-x-1.5 w-full sm:w-auto">
+                  <div className="flex items-center space-x-1.5">
+                    {currentManualUrl && (
+                      <div className="w-6 h-8 rounded bg-slate-800 overflow-hidden border border-slate-700 flex-shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={currentManualUrl}
+                          alt="preview"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
                     <input
                       type="text"
                       placeholder="Paste image URL..."

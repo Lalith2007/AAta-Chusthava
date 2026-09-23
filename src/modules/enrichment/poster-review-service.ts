@@ -1,6 +1,7 @@
 import { prisma } from '@/infrastructure/db/client';
-import { resolvePosterUrl } from '@/lib/poster-utils';
 import { recordPosterProvenance } from '@/lib/poster-provenance';
+import { mediaIdentityValidator, IdentityConfidence, PosterCandidate, PosterValidationResult } from './media-identity-validator';
+import { posterDiscoveryProvider } from './poster-discovery-provider';
 
 export interface PosterReviewItem {
   id: string;
@@ -12,6 +13,14 @@ export interface PosterReviewItem {
   currentPosterAsset: string | null;
   candidatePosterUrl: string | null;
   candidateSource: string | null;
+  googleSearchUrl: string;
+  confidence?: IdentityConfidence;
+  matchEvidence?: {
+    titleMatch: 'EXACT' | 'PARTIAL' | 'MISMATCH';
+    yearMatch: 'EXACT' | 'NEAR' | 'MISMATCH' | 'UNKNOWN';
+    sourceTrust: 'TRUSTED' | 'MODERATE' | 'UNVERIFIED';
+    contextCorroboration: boolean;
+  };
   directors: string[];
   leadCast: string[];
 }
@@ -26,12 +35,13 @@ export interface PosterReviewQueueResult {
 
 export class PosterReviewService {
   /**
-   * Retrieves paginated movies requiring manual poster review
+   * Retrieves paginated movies requiring manual poster review with exact Google search links
    */
   async getPosterReviewQueue(options: {
     page?: number;
     pageSize?: number;
     search?: string;
+    targetOnly?: boolean;
   } = {}): Promise<PosterReviewQueueResult> {
     const page = Math.max(1, options.page || 1);
     const pageSize = Math.max(1, Math.min(100, options.pageSize || 20));
@@ -51,6 +61,10 @@ export class PosterReviewService {
         contains: options.search,
         mode: 'insensitive',
       };
+    }
+
+    if (options.targetOnly) {
+      where.eligibility = { playableAsTarget: true };
     }
 
     const total = await prisma.movie.count({ where });
@@ -93,6 +107,11 @@ export class PosterReviewService {
         .filter((p) => p.roleType === 'LEAD')
         .map((p) => p.person.canonicalName);
 
+      const googleSearchUrl = mediaIdentityValidator.buildMovieGoogleSearchUrl(
+        m.primaryTitle,
+        m.releaseYear
+      );
+
       return {
         id: m.id,
         title: m.primaryTitle,
@@ -102,7 +121,9 @@ export class PosterReviewService {
         languages: m.supportedLanguages,
         currentPosterAsset: m.posterAsset,
         candidatePosterUrl: null,
-        candidateSource: m.tmdbId ? 'TMDB_PENDING_REVIEW' : 'NONE',
+        candidateSource: m.tmdbId ? 'TMDB_PENDING_REVIEW' : 'GOOGLE_SEARCH_PENDING',
+        googleSearchUrl,
+        confidence: m.tmdbId ? 'MEDIUM' : 'LOW',
         directors,
         leadCast,
       };
@@ -118,21 +139,22 @@ export class PosterReviewService {
   }
 
   /**
-   * Approves a candidate poster and updates the movie
+   * Approves a candidate poster and updates the movie with strict URL health check & provenance
    */
   async approvePosterCandidate(
     movieId: string,
     posterUrl: string,
-    adminId: string
+    adminId: string,
+    source: 'ADMIN_MANUAL_VERIFIED' | 'TMDB_ID_MATCH' | 'TMDB_TITLE_YEAR_MATCH' | 'GOOGLE_TITLE_YEAR_VERIFIED' = 'ADMIN_MANUAL_VERIFIED'
   ): Promise<{ success: boolean; normalizedUrl: string }> {
-    const normalizedUrl = resolvePosterUrl(posterUrl);
-    if (!normalizedUrl) {
-      throw new Error('Invalid poster URL candidate provided.');
+    const check = mediaIdentityValidator.validateImageUrl(posterUrl);
+    if (!check.isValid || !check.normalizedUrl) {
+      throw new Error(`Invalid poster candidate URL: ${check.reason || 'Failed validation'}`);
     }
 
     const movie = await prisma.movie.findUnique({
       where: { id: movieId },
-      select: { id: true, posterAsset: true },
+      select: { id: true, posterAsset: true, primaryTitle: true, releaseYear: true },
     });
 
     if (!movie) {
@@ -141,17 +163,18 @@ export class PosterReviewService {
 
     await prisma.movie.update({
       where: { id: movieId },
-      data: { posterAsset: normalizedUrl },
+      data: { posterAsset: check.normalizedUrl },
     });
 
-    await recordPosterProvenance(movieId, movie.posterAsset, normalizedUrl, {
-      source: 'MANUAL_ADMIN',
+    await recordPosterProvenance(movieId, movie.posterAsset, check.normalizedUrl, {
+      source: source as any,
       verificationMethod: 'ADMIN_APPROVAL',
       verifiedAt: new Date().toISOString(),
       adminId,
+      notes: `Approved for ${movie.primaryTitle} (${movie.releaseYear})`,
     });
 
-    return { success: true, normalizedUrl };
+    return { success: true, normalizedUrl: check.normalizedUrl };
   }
 
   /**
@@ -195,7 +218,33 @@ export class PosterReviewService {
     url: string,
     adminId: string
   ): Promise<{ success: boolean; normalizedUrl: string }> {
-    return this.approvePosterCandidate(movieId, url, adminId);
+    return this.approvePosterCandidate(movieId, url, adminId, 'ADMIN_MANUAL_VERIFIED');
+  }
+
+  /**
+   * Runs multi-source discovery for a single movie candidate
+   */
+  async discoverCandidate(movieId: string) {
+    const movie = await prisma.movie.findUnique({
+      where: { id: movieId },
+      select: {
+        id: true,
+        primaryTitle: true,
+        releaseYear: true,
+        tmdbId: true,
+        originalTitle: true,
+      },
+    });
+
+    if (!movie) throw new Error(`Movie with ID ${movieId} not found.`);
+
+    return posterDiscoveryProvider.discoverPoster({
+      id: movie.id,
+      title: movie.primaryTitle,
+      releaseYear: movie.releaseYear,
+      tmdbId: movie.tmdbId,
+      originalTitle: movie.originalTitle,
+    });
   }
 }
 

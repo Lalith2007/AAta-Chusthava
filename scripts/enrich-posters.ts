@@ -10,16 +10,26 @@ async function main() {
   const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : undefined;
   const concurrencyArg = args.find((a) => a.startsWith('--concurrency='));
   const concurrency = concurrencyArg ? parseInt(concurrencyArg.split('=')[1], 10) : 5;
+  const retryArg = args.find((a) => a.startsWith('--retry='));
+  const maxRetries = retryArg ? parseInt(retryArg.split('=')[1], 10) : 2;
+  const sourceArg = args.find((a) => a.startsWith('--source='));
+  const source = (sourceArg ? sourceArg.split('=')[1] : 'all') as 'tmdb' | 'google' | 'all';
+  const targetOnly = args.includes('--target-only');
+  const missingOnly = args.includes('--missing-only');
+  const manualOnly = args.includes('--manual-only');
 
   const isTmdbConfigured = tmdbAdapter.isConfigured();
 
   console.log('============================================================');
-  console.log('AAta CHUSTHAVA — REAL MOVIE POSTER ENRICHMENT PIPELINE');
+  console.log('AAta CHUSTHAVA — SPRINT 30B POSTER ENRICHMENT PIPELINE');
   console.log('============================================================');
   console.log(`Mode:            ${dryRun ? 'DRY-RUN (No Database Writes)' : 'LIVE EXECUTION'}`);
   console.log(`Limit:           ${limit ? limit : 'ALL Candidate Records'}`);
   console.log(`Concurrency:     ${concurrency}`);
-  console.log(`TMDB Configured: ${isTmdbConfigured ? 'YES (Live API Credentials Present)' : 'NO (Credentials Missing - Local .env Empty)'}`);
+  console.log(`Max Retries:     ${maxRetries}`);
+  console.log(`Source Provider: ${source.toUpperCase()}`);
+  console.log(`Filter:          ${targetOnly ? 'TARGET-PLAYABLE ONLY' : 'ALL ACTIVE'}`);
+  console.log(`TMDB Configured: ${isTmdbConfigured ? 'YES (Live API Credentials Present)' : 'NO (Credentials Missing - Fallback to Discovery)'}`);
   console.log('============================================================\n');
 
   const startTime = Date.now();
@@ -28,6 +38,11 @@ async function main() {
     dryRun,
     limit,
     concurrency,
+    maxRetries,
+    source,
+    targetOnly,
+    missingOnly,
+    manualOnly,
     onProgress: (p) => {
       if (p.processed % 25 === 0 || p.processed === p.total) {
         const pct = Math.round((p.processed / p.total) * 100);
@@ -48,7 +63,8 @@ async function main() {
   console.log(`Total Candidates Processed:          ${report.totalProcessed}`);
   console.log(`Successfully Enriched:               ${report.successfullyEnriched}`);
   console.log(`Already Had Valid Poster:            ${report.alreadyHadPoster}`);
-  console.log(`No Poster Available on TMDB:         ${report.noPosterAvailable}`);
+  console.log(`Manual Review Required:              ${report.manualReviewRequired}`);
+  console.log(`No Poster Available on Sources:      ${report.noPosterAvailable}`);
   console.log(`Lookup / Network Failures:           ${report.lookupFailures}`);
   console.log(`  - Config Missing (CONFIG_MISSING):         ${report.configMissingFailures}`);
   console.log(`  - Authentication (AUTH_ERROR):             ${report.authFailures}`);

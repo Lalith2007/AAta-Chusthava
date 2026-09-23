@@ -1,8 +1,20 @@
 import { prisma } from '@/infrastructure/db/client';
 
 export interface PosterProvenanceData {
-  source: 'TMDB_ID_EXACT' | 'TMDB_TITLE_YEAR' | 'MANUAL_ADMIN' | 'MIGRATION';
-  verificationMethod: 'AUTOMATED_EXACT_MATCH' | 'ADMIN_APPROVAL' | 'HISTORICAL_BASELINE';
+  source:
+    | 'TMDB_ID_EXACT'
+    | 'TMDB_TITLE_YEAR'
+    | 'TMDB_ID_MATCH'
+    | 'TMDB_TITLE_YEAR_MATCH'
+    | 'GOOGLE_TITLE_YEAR_VERIFIED'
+    | 'ADMIN_MANUAL_VERIFIED'
+    | 'MANUAL_ADMIN'
+    | 'MIGRATION';
+  verificationMethod:
+    | 'AUTOMATED_EXACT_MATCH'
+    | 'DISCOVERY_PROVIDER_MATCH'
+    | 'ADMIN_APPROVAL'
+    | 'HISTORICAL_BASELINE';
   verifiedAt: string;
   adminId?: string;
   notes?: string;
