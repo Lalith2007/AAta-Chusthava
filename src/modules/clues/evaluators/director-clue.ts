@@ -19,6 +19,14 @@ export class DirectorClueEvaluator implements ClueEvaluator {
         direction: 'NONE',
         matchedValues: [],
         displayValue: guessDirs.map((d) => d.canonicalName).join(', ') || 'Unknown',
+        metadata: {
+          persons: guessDirs.map((d) => ({
+            id: d.id,
+            canonicalName: d.canonicalName,
+            image: d.image ?? null,
+            matched: false,
+          })),
+        },
       };
     }
 
@@ -33,6 +41,12 @@ export class DirectorClueEvaluator implements ClueEvaluator {
       displayValue: guessDirs.map((d) => d.canonicalName).join(', '),
       metadata: {
         matchedDirectorIds: matched.map((d) => d.id),
+        persons: guessDirs.map((d) => ({
+          id: d.id,
+          canonicalName: d.canonicalName,
+          image: d.image ?? null,
+          matched: targetDirIds.has(d.id),
+        })),
       },
     };
   }

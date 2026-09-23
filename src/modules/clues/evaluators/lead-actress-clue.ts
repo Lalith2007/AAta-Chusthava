@@ -19,6 +19,14 @@ export class LeadActressClueEvaluator implements ClueEvaluator {
         direction: 'NONE',
         matchedValues: [],
         displayValue: guessActresses.map((a) => a.canonicalName).join(', ') || 'Unknown',
+        metadata: {
+          persons: guessActresses.map((a) => ({
+            id: a.id,
+            canonicalName: a.canonicalName,
+            image: a.image ?? null,
+            matched: false,
+          })),
+        },
       };
     }
 
@@ -33,6 +41,12 @@ export class LeadActressClueEvaluator implements ClueEvaluator {
       displayValue: guessActresses.map((a) => a.canonicalName).join(', '),
       metadata: {
         matchedActressIds: matched.map((a) => a.id),
+        persons: guessActresses.map((a) => ({
+          id: a.id,
+          canonicalName: a.canonicalName,
+          image: a.image ?? null,
+          matched: targetActressIds.has(a.id),
+        })),
       },
     };
   }

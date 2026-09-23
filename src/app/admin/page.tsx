@@ -19,14 +19,17 @@ import {
   AlertTriangle,
   History,
   Sparkles,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { ReviewQueueView } from '@/components/admin/ReviewQueueView';
+import PosterReviewView from '@/components/admin/PosterReviewView';
 
-type Tab = 'overview' | 'review' | 'movies' | 'puzzles' | 'audit';
+type Tab = 'overview' | 'review' | 'media' | 'movies' | 'puzzles' | 'audit';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [overview, setOverview] = useState<any>(null);
+  const [mediaStats, setMediaStats] = useState<any>(null);
   const [reviewQueue, setReviewQueue] = useState<any>(null);
   const [movies, setMovies] = useState<any[]>([]);
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -42,15 +45,17 @@ export default function AdminPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [statsRes, reviewRes, puzzlesRes, logsRes] = await Promise.all([
+      const [statsRes, reviewRes, puzzlesRes, logsRes, mediaRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/admin/review-queue'),
         fetch('/api/admin/puzzles'),
         fetch('/api/admin/audit-logs'),
+        fetch('/api/admin/media/stats').catch(() => null),
       ]);
 
       if (statsRes.ok) setOverview(await statsRes.json());
       if (reviewRes.ok) setReviewQueue(await reviewRes.json());
+      if (mediaRes && mediaRes.ok) setMediaStats(await mediaRes.json());
       if (puzzlesRes.ok) {
         const data = await puzzlesRes.json();
         setPuzzles(data.scheduled || []);
@@ -200,6 +205,7 @@ export default function AdminPage() {
         {[
           { key: 'overview', label: 'System Health', icon: Activity },
           { key: 'review', label: 'Review Queue', icon: CheckCircle },
+          { key: 'media', label: 'Media Quality', icon: ImageIcon },
           { key: 'movies', label: 'Movie Curation', icon: Film },
           { key: 'puzzles', label: 'Puzzle Scheduler', icon: Calendar },
           { key: 'audit', label: 'Audit Logs', icon: History },
@@ -357,6 +363,97 @@ export default function AdminPage() {
       {activeTab === 'review' && (
         <div className="space-y-6">
           <ReviewQueueView />
+        </div>
+      )}
+
+      {/* TAB: MEDIA QUALITY */}
+      {activeTab === 'media' && (
+        <div className="space-y-6">
+          {/* Media Quality Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Poster Coverage Card */}
+            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                  Movie Poster Coverage
+                </span>
+                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  {mediaStats?.posters?.coveragePct ?? 0}% Verified
+                </span>
+              </div>
+
+              <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${mediaStats?.posters?.coveragePct ?? 0}%` }}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-2 text-center border-t border-slate-800/80">
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold">Total Active</p>
+                  <p className="text-base font-extrabold text-slate-200">
+                    {mediaStats?.posters?.totalActiveMovies ?? 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold">With Poster</p>
+                  <p className="text-base font-extrabold text-emerald-400">
+                    {mediaStats?.posters?.withPoster ?? 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold">Missing / Review</p>
+                  <p className="text-base font-extrabold text-amber-400">
+                    {mediaStats?.posters?.withoutPoster ?? 0}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Person Image Coverage Card */}
+            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                  Person Profile Images
+                </span>
+                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                  {mediaStats?.persons?.coveragePct ?? 0}% Coverage
+                </span>
+              </div>
+
+              <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-purple-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${mediaStats?.persons?.coveragePct ?? 0}%` }}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-2 text-center border-t border-slate-800/80">
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold">Total Persons</p>
+                  <p className="text-base font-extrabold text-slate-200">
+                    {mediaStats?.persons?.totalPersons ?? 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold">Lead Cast Img</p>
+                  <p className="text-base font-extrabold text-purple-300">
+                    {mediaStats?.persons?.leadCastWithImage ?? 0} / {mediaStats?.persons?.leadCastCount ?? 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold">Directors Img</p>
+                  <p className="text-base font-extrabold text-purple-300">
+                    {mediaStats?.persons?.directorsWithImage ?? 0} / {mediaStats?.persons?.directorsCount ?? 0}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Poster Review Queue */}
+          <PosterReviewView />
         </div>
       )}
 

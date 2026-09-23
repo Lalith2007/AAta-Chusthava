@@ -1,6 +1,7 @@
 import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter, TmdbMovieDetails } from '@/infrastructure/external-sources/tmdb-adapter';
 import { resolvePosterUrl } from '@/lib/poster-utils';
+import { recordPosterProvenance } from '@/lib/poster-provenance';
 
 export type PosterFailureCategory =
   | 'CONFIG_MISSING'
@@ -259,6 +260,12 @@ export class PosterEnrichmentService {
             data: {
               posterAsset: normalizedUrl,
             },
+          });
+
+          await recordPosterProvenance(movie.id, previousPosterAsset, normalizedUrl, {
+            source: 'TMDB_ID_EXACT',
+            verificationMethod: 'AUTOMATED_EXACT_MATCH',
+            verifiedAt: new Date().toISOString(),
           });
 
           // 2. Preserve Provenance: Upsert RawSourceRecord
