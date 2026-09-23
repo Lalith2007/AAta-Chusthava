@@ -98,12 +98,14 @@ export function classifyPosterError(error: unknown): {
 export interface PosterEnrichmentOptions {
   dryRun?: boolean;
   limit?: number;
+  skip?: number;
   movieId?: string;
   concurrency?: number;
   maxRetries?: number;
   retryDelayMs?: number;
   source?: 'tmdb' | 'google' | 'all';
   targetOnly?: boolean;
+  nonTargetOnly?: boolean;
   missingOnly?: boolean;
   manualOnly?: boolean;
   onProgress?: (progress: {
@@ -379,9 +381,24 @@ export class PosterEnrichmentService {
 
         if (discovery.status === 'VERIFIED' && discovery.posterUrl) {
           if (!options.dryRun) {
+            const updateData: any = { posterAsset: discovery.posterUrl };
+            if (!movie.tmdbId && discovery.candidate?.tmdbId) {
+              try {
+                const existing = await prisma.movie.findUnique({
+                  where: { tmdbId: discovery.candidate.tmdbId },
+                  select: { id: true },
+                });
+                if (!existing) {
+                  updateData.tmdbId = discovery.candidate.tmdbId;
+                }
+              } catch {
+                // Ignore unique check error
+              }
+            }
+
             await prisma.movie.update({
               where: { id: movie.id },
-              data: { posterAsset: discovery.posterUrl },
+              data: updateData,
             });
 
             await recordPosterProvenance(movie.id, previousPosterAsset, discovery.posterUrl, {
@@ -455,6 +472,8 @@ export class PosterEnrichmentService {
 
     if (options.targetOnly) {
       candidateWhere.eligibility = { playableAsTarget: true };
+    } else if (options.nonTargetOnly) {
+      candidateWhere.eligibility = { playableAsTarget: false };
     }
 
     if (options.movieId) {
@@ -463,6 +482,7 @@ export class PosterEnrichmentService {
 
     const candidates = await prisma.movie.findMany({
       where: candidateWhere,
+      skip: options.skip,
       take: options.limit,
       orderBy: [{ releaseYear: 'desc' }, { primaryTitle: 'asc' }],
       select: { id: true, primaryTitle: true, releaseYear: true, tmdbId: true },

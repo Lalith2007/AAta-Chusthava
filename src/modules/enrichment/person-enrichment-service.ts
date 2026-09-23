@@ -49,6 +49,10 @@ export interface PersonAuditStats {
   totalPersons: number;
   personsInActiveMovies: number;
   personsInTargetPlayable: number;
+  playerVisibleTotal: number;
+  playerVisibleWithImage: number;
+  playerVisibleWithoutImage: number;
+  playerVisibleManualReview: number;
   withImage: number;
   withoutImage: number;
   withTmdbId: number;
@@ -57,6 +61,8 @@ export interface PersonAuditStats {
   leadCastWithImage: number;
   directorsCount: number;
   directorsWithImage: number;
+  supportingCastCount: number;
+  supportingCastWithImage: number;
   enrichmentCandidates: number;
 }
 
@@ -524,6 +530,70 @@ export class PersonEnrichmentService {
       },
     });
 
+    // Supporting Cast counts (visible in CastTile)
+    const supportingCastCount = await prisma.person.count({
+      where: {
+        movies: {
+          some: {
+            roleType: 'SUPPORTING',
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
+    const supportingCastWithImage = await prisma.person.count({
+      where: {
+        image: { not: null },
+        NOT: [{ image: '' }, { image: 'null' }, { image: 'undefined' }],
+        movies: {
+          some: {
+            roleType: 'SUPPORTING',
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
+    // Player-Visible Person Total (LEAD, DIRECTOR, SUPPORTING in Target-Playable Movies)
+    const playerVisibleTotal = await prisma.person.count({
+      where: {
+        movies: {
+          some: {
+            roleType: { in: ['LEAD', 'DIRECTOR', 'SUPPORTING'] },
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
+    const playerVisibleWithImage = await prisma.person.count({
+      where: {
+        image: { not: null },
+        NOT: [{ image: '' }, { image: 'null' }, { image: 'undefined' }],
+        movies: {
+          some: {
+            roleType: { in: ['LEAD', 'DIRECTOR', 'SUPPORTING'] },
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
+    const playerVisibleWithoutImage = playerVisibleTotal - playerVisibleWithImage;
+
     // Enrichment candidates
     const enrichmentCandidates = await prisma.person.count({
       where: {
@@ -541,6 +611,10 @@ export class PersonEnrichmentService {
       totalPersons,
       personsInActiveMovies,
       personsInTargetPlayable,
+      playerVisibleTotal,
+      playerVisibleWithImage,
+      playerVisibleWithoutImage,
+      playerVisibleManualReview: playerVisibleWithoutImage,
       withImage,
       withoutImage: totalPersons - withImage,
       withTmdbId,
@@ -549,6 +623,8 @@ export class PersonEnrichmentService {
       leadCastWithImage,
       directorsCount,
       directorsWithImage,
+      supportingCastCount,
+      supportingCastWithImage,
       enrichmentCandidates,
     };
   }

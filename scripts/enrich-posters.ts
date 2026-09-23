@@ -8,6 +8,8 @@ async function main() {
   const dryRun = args.includes('--dry-run');
   const limitArg = args.find((a) => a.startsWith('--limit='));
   const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : undefined;
+  const skipArg = args.find((a) => a.startsWith('--skip='));
+  const skip = skipArg ? parseInt(skipArg.split('=')[1], 10) : undefined;
   const concurrencyArg = args.find((a) => a.startsWith('--concurrency='));
   const concurrency = concurrencyArg ? parseInt(concurrencyArg.split('=')[1], 10) : 5;
   const retryArg = args.find((a) => a.startsWith('--retry='));
@@ -15,6 +17,7 @@ async function main() {
   const sourceArg = args.find((a) => a.startsWith('--source='));
   const source = (sourceArg ? sourceArg.split('=')[1] : 'all') as 'tmdb' | 'google' | 'all';
   const targetOnly = args.includes('--target-only');
+  const nonTargetOnly = args.includes('--non-target-only');
   const missingOnly = args.includes('--missing-only');
   const manualOnly = args.includes('--manual-only');
 
@@ -25,10 +28,11 @@ async function main() {
   console.log('============================================================');
   console.log(`Mode:            ${dryRun ? 'DRY-RUN (No Database Writes)' : 'LIVE EXECUTION'}`);
   console.log(`Limit:           ${limit ? limit : 'ALL Candidate Records'}`);
+  console.log(`Skip:            ${skip ?? 0}`);
   console.log(`Concurrency:     ${concurrency}`);
   console.log(`Max Retries:     ${maxRetries}`);
   console.log(`Source Provider: ${source.toUpperCase()}`);
-  console.log(`Filter:          ${targetOnly ? 'TARGET-PLAYABLE ONLY' : 'ALL ACTIVE'}`);
+  console.log(`Filter:          ${targetOnly ? 'TARGET-PLAYABLE ONLY' : nonTargetOnly ? 'NON-TARGET ACTIVE ONLY' : 'ALL ACTIVE'}`);
   console.log(`TMDB Configured: ${isTmdbConfigured ? 'YES (Live API Credentials Present)' : 'NO (Credentials Missing - Fallback to Discovery)'}`);
   console.log('============================================================\n');
 
@@ -37,10 +41,12 @@ async function main() {
   const report = await posterEnrichmentService.enrichAllMissingPosters({
     dryRun,
     limit,
+    skip,
     concurrency,
     maxRetries,
     source,
     targetOnly,
+    nonTargetOnly,
     missingOnly,
     manualOnly,
     onProgress: (p) => {
