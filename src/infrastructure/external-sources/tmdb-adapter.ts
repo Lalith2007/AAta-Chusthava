@@ -101,6 +101,7 @@ export interface MovieDataSource {
   getCredits(sourceMovieId: string): Promise<TmdbCredits>;
   getAlternativeTitles(sourceMovieId: string): Promise<string[]>;
   getPersonDetails?(personId: string | number): Promise<TmdbPersonDetails | null>;
+  searchPerson?(query: string): Promise<{ results: any[] }>;
 }
 
 import { HISTORICAL_CATALOG, HistoricalMovieRecord } from './historical-catalog-data';
@@ -465,11 +466,11 @@ export class TmdbAdapter implements MovieDataSource {
   async getPersonDetails(personId: string | number): Promise<TmdbPersonDetails | null> {
     const numId = Number(personId);
 
-    // 1. Check historical catalog mock data
+    // 1. Check historical catalog mock data if it has a profile_path
     for (const m of HISTORICAL_CATALOG) {
       if (m.credits?.cast) {
         const found = m.credits.cast.find((c) => c.id === numId);
-        if (found) {
+        if (found && found.profile_path) {
           return {
             id: found.id,
             name: found.name,
@@ -480,7 +481,7 @@ export class TmdbAdapter implements MovieDataSource {
       }
       if (m.credits?.crew) {
         const found = m.credits.crew.find((c) => c.id === numId);
-        if (found) {
+        if (found && found.profile_path) {
           return {
             id: found.id,
             name: found.name,
@@ -511,6 +512,20 @@ export class TmdbAdapter implements MovieDataSource {
       };
     } catch {
       return null;
+    }
+  }
+
+  async searchPerson(query: string): Promise<{ results: any[] }> {
+    if (!this.apiKey && !this.token) {
+      return { results: [] };
+    }
+    try {
+      const url = this.getUrl('/search/person', { query });
+      const res = await this.fetchWithRetry(url);
+      if (!res.ok) return { results: [] };
+      return res.json();
+    } catch {
+      return { results: [] };
     }
   }
 }

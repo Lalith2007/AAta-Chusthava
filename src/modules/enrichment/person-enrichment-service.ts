@@ -114,7 +114,6 @@ export class PersonEnrichmentService {
 
       const rawProfilePath = details?.profile_path?.trim() || null;
       const normalizedUrl = resolvePosterUrl(rawProfilePath, 'w185');
-
       const urlCheck = mediaIdentityValidator.validateImageUrl(normalizedUrl);
 
       if (rawProfilePath && normalizedUrl && urlCheck.isValid) {
