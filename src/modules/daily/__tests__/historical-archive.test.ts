@@ -10,7 +10,8 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
   const TEST_PAST_DATE_1 = '2023-05-10';
   const TEST_PAST_DATE_2 = '2023-05-11';
   const TEST_NONEXISTENT_PAST_DATE = '2021-11-20';
-  const ALL_TEST_DATES = [TEST_PAST_DATE_1, TEST_PAST_DATE_2, TEST_NONEXISTENT_PAST_DATE];
+  const TEST_FUTURE_DATE = '2048-01-01';
+  const ALL_TEST_DATES = [TEST_PAST_DATE_1, TEST_PAST_DATE_2, TEST_NONEXISTENT_PAST_DATE, TEST_FUTURE_DATE];
 
   const cleanArchivePuzzles = async () => {
     const testPuzzles = await prisma.dailyPuzzle.findMany({
@@ -251,12 +252,12 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
   describe('4. Archive Listing Filtering & Public Secrecy', () => {
     it('returns only genuinely historical past puzzles and never exposes secret target data', async () => {
       const todayIST = getIndianCalendarDate(new Date());
-      const tomorrowIST = addDaysToPuzzleDate(todayIST, 1);
-      const pastDate = subtractDaysFromPuzzleDate(todayIST, 10);
+      const pastDate = TEST_PAST_DATE_1;
+      const futureDate = TEST_FUTURE_DATE;
 
       // Clean up test dates if already existing
       const existingTestPuzzles = await prisma.dailyPuzzle.findMany({
-        where: { puzzleDate: { in: [pastDate, tomorrowIST] } },
+        where: { puzzleDate: { in: [pastDate, futureDate] } },
         select: { id: true, gameId: true },
       });
       if (existingTestPuzzles.length > 0) {
@@ -292,7 +293,7 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
       });
       await prisma.dailyPuzzle.create({
         data: {
-          puzzleDate: tomorrowIST,
+          puzzleDate: futureDate,
           gameId: futureGame.id,
           targetMovieId: movie!.id,
           rulesetId: ruleset!.id,
@@ -309,7 +310,7 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
 
         // Today and Future dates MUST NOT be in archive list
         expect(archives.some((a) => a.puzzleDate === todayIST)).toBe(false);
-        expect(archives.some((a) => a.puzzleDate === tomorrowIST)).toBe(false);
+        expect(archives.some((a) => a.puzzleDate === futureDate)).toBe(false);
 
         // Verify ZERO target metadata in serialized archive listing
         const serialized = JSON.stringify(archives);
@@ -318,7 +319,7 @@ describe('Sprint 25: Historical Daily Archive Hardening & Immutability Suite', (
         expect(serialized).not.toContain('selectionMetadata');
       } finally {
         await prisma.dailyPuzzle.deleteMany({
-          where: { puzzleDate: { in: [pastDate, tomorrowIST] } },
+          where: { puzzleDate: { in: [pastDate, futureDate] } },
         });
         await prisma.game.deleteMany({
           where: { id: { in: [pastGame.id, futureGame.id] } },

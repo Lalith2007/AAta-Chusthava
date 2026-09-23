@@ -363,12 +363,23 @@ describe('Deterministic Daily Puzzle Engine (DAILY_SELECTION_V1)', () => {
 
   // 8. BATCH SCHEDULING & CONCURRENCY
   describe('8. Batch Scheduling & Idempotency', () => {
+    const BATCH_START_DATE = '2038-05-01';
+    const batchDates = ['2038-05-01', '2038-05-02', '2038-05-03'];
+
+    beforeEach(async () => {
+      await cleanPuzzlesAndGames(batchDates);
+    });
+
+    afterEach(async () => {
+      await cleanPuzzlesAndGames(batchDates);
+    });
+
     it('idempotently schedules future puzzles for N days ahead', async () => {
-      const scheduledCount = await dailyPuzzleService.ensureUpcomingPuzzlesScheduled(3);
-      expect(scheduledCount).toBeGreaterThanOrEqual(0);
+      const scheduledCount = await dailyPuzzleService.ensureUpcomingPuzzlesScheduled(3, BATCH_START_DATE);
+      expect(scheduledCount).toBe(3);
 
       // Second run must be idempotent (0 newly scheduled)
-      const secondRunCount = await dailyPuzzleService.ensureUpcomingPuzzlesScheduled(3);
+      const secondRunCount = await dailyPuzzleService.ensureUpcomingPuzzlesScheduled(3, BATCH_START_DATE);
       expect(secondRunCount).toBe(0);
     });
   });
