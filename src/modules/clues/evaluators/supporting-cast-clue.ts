@@ -19,6 +19,17 @@ export class SupportingCastClueEvaluator implements ClueEvaluator {
         direction: 'NONE',
         matchedValues: [],
         displayValue: guessCast.slice(0, 3).map((c) => c.canonicalName).join(', ') || 'Unknown',
+        metadata: {
+          matchedCount: 0,
+          totalTargetSupporting: targetCast.length,
+          matchedNames: [],
+          persons: guessCast.slice(0, 6).map((c) => ({
+            id: c.id,
+            canonicalName: c.canonicalName,
+            image: c.image ?? null,
+            matched: false,
+          })),
+        },
       };
     }
 
@@ -40,6 +51,12 @@ export class SupportingCastClueEvaluator implements ClueEvaluator {
         matchedCount: matched.length,
         totalTargetSupporting: targetCast.length,
         matchedNames: matched.map((c) => c.canonicalName),
+        persons: guessCast.slice(0, 6).map((c) => ({
+          id: c.id,
+          canonicalName: c.canonicalName,
+          image: c.image ?? null,
+          matched: targetCastIds.has(c.id),
+        })),
       },
     };
   }

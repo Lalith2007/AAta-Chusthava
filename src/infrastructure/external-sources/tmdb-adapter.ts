@@ -53,6 +53,14 @@ export interface TmdbCredits {
   }>;
 }
 
+export interface TmdbPersonDetails {
+  id: number;
+  name: string;
+  profile_path?: string | null;
+  also_known_as?: string[];
+  gender?: number;
+}
+
 export interface TmdbDiscoveryOptions {
   language: string; // 'te' | 'hi'
   year?: number;
@@ -92,6 +100,7 @@ export interface MovieDataSource {
   getMovieDetails(sourceMovieId: string): Promise<TmdbMovieDetails>;
   getCredits(sourceMovieId: string): Promise<TmdbCredits>;
   getAlternativeTitles(sourceMovieId: string): Promise<string[]>;
+  getPersonDetails?(personId: string | number): Promise<TmdbPersonDetails | null>;
 }
 
 import { HISTORICAL_CATALOG, HistoricalMovieRecord } from './historical-catalog-data';
@@ -450,6 +459,58 @@ export class TmdbAdapter implements MovieDataSource {
       return (data.titles || []).map((t: any) => t.title);
     } catch {
       return [];
+    }
+  }
+
+  async getPersonDetails(personId: string | number): Promise<TmdbPersonDetails | null> {
+    const numId = Number(personId);
+
+    // 1. Check historical catalog mock data
+    for (const m of HISTORICAL_CATALOG) {
+      if (m.credits?.cast) {
+        const found = m.credits.cast.find((c) => c.id === numId);
+        if (found) {
+          return {
+            id: found.id,
+            name: found.name,
+            profile_path: found.profile_path,
+            gender: found.gender,
+          };
+        }
+      }
+      if (m.credits?.crew) {
+        const found = m.credits.crew.find((c) => c.id === numId);
+        if (found) {
+          return {
+            id: found.id,
+            name: found.name,
+            profile_path: found.profile_path,
+          };
+        }
+      }
+    }
+
+    if (!this.apiKey && !this.token) {
+      return null;
+    }
+
+    try {
+      const url = this.getUrl(`/person/${personId}`);
+      const res = await this.fetchWithRetry(url);
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        throw new Error(`TMDB getPersonDetails error: ${res.status} ${res.statusText}`);
+      }
+      const data = await res.json();
+      return {
+        id: data.id,
+        name: data.name,
+        profile_path: data.profile_path,
+        also_known_as: data.also_known_as,
+        gender: data.gender,
+      };
+    } catch {
+      return null;
     }
   }
 }

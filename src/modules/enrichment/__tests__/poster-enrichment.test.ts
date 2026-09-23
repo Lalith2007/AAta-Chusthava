@@ -124,6 +124,9 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
         sourceRecordId: { in: [String(TEST_TMDB_ID_1), String(TEST_TMDB_ID_2), String(TEST_TMDB_ID_3), String(TEST_TMDB_ID_4)] },
       },
     });
+    await prisma.auditLog.deleteMany({
+      where: { entityId: { in: [TEST_MOVIE_ID_1, TEST_MOVIE_ID_2, TEST_MOVIE_ID_3, TEST_MOVIE_ID_4] } },
+    });
 
     // 1. Candidate with missing posterAsset
     await prisma.movie.create({
@@ -250,6 +253,9 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
         source: 'TMDB',
         sourceRecordId: { in: [String(TEST_TMDB_ID_1), String(TEST_TMDB_ID_2), String(TEST_TMDB_ID_3), String(TEST_TMDB_ID_4)] },
       },
+    });
+    await prisma.auditLog.deleteMany({
+      where: { entityId: { in: [TEST_MOVIE_ID_1, TEST_MOVIE_ID_2, TEST_MOVIE_ID_3, TEST_MOVIE_ID_4] } },
     });
   });
 
@@ -519,5 +525,55 @@ describe('Sprint 26B: Real Movie Poster Enrichment Pipeline Test Suite', () => {
     expect(targetMovie?.posterAsset).toBe(`${TMDB_IMAGE_BASE_URL}/w500/target_integrity_poster.jpg`);
     expect(targetMovie?.slug).toBe('test-target-integrity-movie-2023');
     expect(targetMovie?.primaryTitle).toBe('Test Target Integrity Movie');
+  });
+
+  it('K. Provenance Tracking: Logs POSTER_ASSIGNED event in AuditLog upon successful enrichment', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
+    vi.spyOn(tmdbAdapter, 'getMovieDetails').mockResolvedValue({
+      id: TEST_TMDB_ID_1,
+      title: 'Test Poster Candidate 1',
+      original_title: 'Test Poster Candidate 1',
+      original_language: 'te',
+      overview: 'Overview',
+      release_date: '2023-01-01',
+      poster_path: '/provenance_test_poster.jpg',
+      genres: [],
+      production_companies: [],
+    });
+
+    await posterEnrichmentService.enrichMoviePoster(TEST_MOVIE_ID_1, { dryRun: false });
+
+    const audit = await prisma.auditLog.findFirst({
+      where: {
+        entityId: TEST_MOVIE_ID_1,
+        action: 'POSTER_ASSIGNED',
+      },
+    });
+
+    expect(audit).not.toBeNull();
+    expect(audit?.action).toBe('POSTER_ASSIGNED');
+    expect((audit?.after as any)?.source).toBe('TMDB_ID_EXACT');
+    expect((audit?.after as any)?.verificationMethod).toBe('AUTOMATED_EXACT_MATCH');
+  });
+
+  it('L. Identity Safety: Rejects malformed or mismatched candidate paths and leaves database intact', async () => {
+    vi.spyOn(tmdbAdapter, 'isConfigured').mockReturnValue(true);
+    vi.spyOn(tmdbAdapter, 'getMovieDetails').mockResolvedValue({
+      id: TEST_TMDB_ID_1,
+      title: 'Test Poster Candidate 1',
+      original_title: 'Test Poster Candidate 1',
+      original_language: 'te',
+      overview: 'Overview',
+      release_date: '2023-01-01',
+      poster_path: 'not-a-valid-image-extension.txt',
+      genres: [],
+      production_companies: [],
+    });
+
+    const result = await posterEnrichmentService.enrichMoviePoster(TEST_MOVIE_ID_1, { dryRun: false });
+    expect(result.status).toBe('NO_POSTER_AVAILABLE');
+
+    const movie = await prisma.movie.findUnique({ where: { id: TEST_MOVIE_ID_1 } });
+    expect(movie?.posterAsset).toBeNull();
   });
 });
