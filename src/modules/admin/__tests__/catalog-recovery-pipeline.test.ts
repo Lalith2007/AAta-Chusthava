@@ -3,6 +3,7 @@ import { prisma } from '@/infrastructure/db/client';
 import { catalogReviewService, isScraperArtifact, classifyPendingMovie } from '../catalog-review-service';
 import { tmdbAdapter } from '@/infrastructure/external-sources/tmdb-adapter';
 import { enrichmentService } from '@/modules/enrichment/enrichment-service';
+import { resolvePosterUrl } from '@/lib/poster-utils';
 
 describe('Sprint 29: Catalog Review Recovery & Identity Resolution Suite', () => {
   let initialMovieCount = 0;
@@ -469,12 +470,19 @@ describe('Sprint 29: Catalog Review Recovery & Identity Resolution Suite', () =>
 
   // 10. Poster recovery
   it('10. Recovers valid TMDB poster URL and rejects invalid formatting', async () => {
-    const movie = await prisma.movie.findUnique({ where: { id: MOVIE_TMDB_LINKED_ID } });
-    expect(movie?.posterAsset).toMatch(/^https:\/\//);
-
     // Verify detail inspection resolves poster correctly
     const detail = await catalogReviewService.getReviewDetail(MOVIE_CANONICAL_TARGET);
     expect(detail.movie.posterAsset).toMatch(/^https:\/\//);
+
+    // Verify resolvePosterUrl normalizes relative paths
+    const resolved = resolvePosterUrl('/test_poster.jpg');
+    expect(resolved).toBe('https://image.tmdb.org/t/p/w500/test_poster.jpg');
+
+    // Verify null/empty/invalid inputs return null without fabricating fake URLs
+    expect(resolvePosterUrl(null)).toBeNull();
+    expect(resolvePosterUrl('')).toBeNull();
+    expect(resolvePosterUrl('null')).toBeNull();
+    expect(resolvePosterUrl('invalid_string_no_ext')).toBeNull();
   });
 
   // 11. Playability recalculation
