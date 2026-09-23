@@ -366,22 +366,8 @@ export class PosterEnrichmentService {
       }
     }
 
-    // 2. If movie has no tmdbId and source is strictly 'tmdb', skip
-    if (!movie.tmdbId && sourceMode === 'tmdb') {
-      return {
-        movieId: movie.id,
-        tmdbId: 0,
-        title: movie.primaryTitle,
-        releaseYear: movie.releaseYear,
-        status: 'SKIPPED',
-        previousPosterAsset: null,
-        newPosterAsset: null,
-        error: 'Movie has no TMDB ID',
-      };
-    }
-
-    // 3. Multi-source discovery provider fallback (title+year search, Google candidate)
-    if (sourceMode === 'all' || sourceMode === 'google') {
+    // 2. TMDB Title+Year search & Multi-source discovery provider fallback
+    if (sourceMode === 'all' || sourceMode === 'tmdb' || sourceMode === 'google') {
       try {
         const discovery = await posterDiscoveryProvider.discoverPoster({
           id: movie.id,
@@ -466,10 +452,6 @@ export class PosterEnrichmentService {
         { posterAsset: 'undefined' },
       ],
     };
-
-    if (options.source === 'tmdb') {
-      candidateWhere.tmdbId = { not: null };
-    }
 
     if (options.targetOnly) {
       candidateWhere.eligibility = { playableAsTarget: true };
