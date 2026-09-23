@@ -93,8 +93,20 @@ export class AdminService {
     return catalogReviewService.returnMovieToReview(movieId, reason, actorId);
   }
 
-  async enrichSingleMovie(movieId: string, actorId = 'admin') {
-    return catalogReviewService.enrichSingleMovie(movieId, actorId);
+  async enrichSingleMovie(movieId: string, optionsOrActorId?: string | { dryRun?: boolean; actorId?: string }) {
+    return catalogReviewService.enrichSingleMovie(movieId, optionsOrActorId);
+  }
+
+  async resolveTmdbIdentity(movieId: string, options?: { dryRun?: boolean; actorId?: string }) {
+    return catalogReviewService.resolveTmdbIdentity(movieId, options);
+  }
+
+  async scanArtifacts(options?: { dryRun?: boolean; limit?: number; actorId?: string }) {
+    return catalogReviewService.scanArtifacts(options);
+  }
+
+  async scanDuplicates(options?: { dryRun?: boolean; limit?: number; actorId?: string }) {
+    return catalogReviewService.scanDuplicates(options);
   }
 
   async approveCandidate(candidateId: string, actorId = 'admin') {

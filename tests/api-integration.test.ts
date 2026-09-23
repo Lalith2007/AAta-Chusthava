@@ -8,29 +8,63 @@ import { movieRepository } from '@/modules/movies/movie-repository';
 describe('AAta Chusthava Full Stack Domain & API Integration', () => {
   let createdChallengeId: string | undefined;
   let createdChallengeGameId: string | undefined;
+  const TEST_DAILY_DATE = '2046-01-01';
 
-  beforeAll(async () => {
-    // Ensure database connection
-    await prisma.$queryRaw`SELECT 1`;
-  });
-
-  afterAll(async () => {
+  const cleanTestData = async () => {
     // Clean up created challenge and associated game
     if (createdChallengeId) {
       await prisma.challenge.deleteMany({
         where: { id: createdChallengeId },
       });
+      createdChallengeId = undefined;
     }
     if (createdChallengeGameId) {
       await prisma.game.deleteMany({
         where: { id: createdChallengeGameId },
       });
+      createdChallengeGameId = undefined;
     }
+
+    // Clean up test daily puzzle, its game, and any sessions/guesses
+    const testPuzzle = await prisma.dailyPuzzle.findUnique({
+      where: { puzzleDate: TEST_DAILY_DATE },
+      select: { id: true, gameId: true },
+    });
+    if (testPuzzle) {
+      const sessions = await prisma.gameSession.findMany({
+        where: { gameId: testPuzzle.gameId },
+        select: { id: true },
+      });
+      const sessionIds = sessions.map((s) => s.id);
+      if (sessionIds.length > 0) {
+        await prisma.gameGuess.deleteMany({
+          where: { sessionId: { in: sessionIds } },
+        });
+        await prisma.gameSession.deleteMany({
+          where: { id: { in: sessionIds } },
+        });
+      }
+      await prisma.dailyPuzzle.delete({
+        where: { id: testPuzzle.id },
+      });
+      await prisma.game.delete({
+        where: { id: testPuzzle.gameId },
+      });
+    }
+  };
+
+  beforeAll(async () => {
+    // Ensure database connection
+    await prisma.$queryRaw`SELECT 1`;
+    await cleanTestData();
+  });
+
+  afterAll(async () => {
+    await cleanTestData();
   });
 
   it('verifies daily session generation and strict target privacy', async () => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const sessionState = await dailyPuzzleService.getDailySession(todayStr, {
+    const sessionState = await dailyPuzzleService.getDailySession(TEST_DAILY_DATE, {
       anonymousPlayerId: 'test_anon_player_1',
     });
 
@@ -88,8 +122,7 @@ describe('AAta Chusthava Full Stack Domain & API Integration', () => {
   });
 
   it('executes full guess flow, verifies transactional state, and unlocks clues', async () => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const sessionState = await dailyPuzzleService.getDailySession(todayStr, {
+    const sessionState = await dailyPuzzleService.getDailySession(TEST_DAILY_DATE, {
       anonymousPlayerId: 'test_integration_guesser',
     });
 

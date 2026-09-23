@@ -69,8 +69,8 @@ describe('Historical Catalog Expansion Pipeline (2002–2026)', () => {
     const report = await catalogCoverageService.getCoverageReport();
 
     expect(report.totals.totalMovies).toBeGreaterThanOrEqual(90);
-    expect(report.totals.activeMovies).toBe(report.totals.totalMovies);
-    expect(report.totals.playableAsGuess).toBe(report.totals.totalMovies);
+    expect(report.totals.activeMovies).toBe(report.totals.totalMovies - report.totals.rejected);
+    expect(report.totals.playableAsGuess).toBe(report.totals.activeMovies);
     expect(report.totals.playableAsTarget).toBeGreaterThanOrEqual(90);
     expect(report.totals.playableAsTarget).toBeLessThanOrEqual(report.totals.totalMovies);
   });

@@ -1,10 +1,108 @@
 import { prisma } from '@/infrastructure/db/client';
 import { AppError } from '@/domain/errors';
 import { enrichmentService, EnrichmentResult } from '@/modules/enrichment/enrichment-service';
+import { posterEnrichmentService } from '@/modules/enrichment/poster-enrichment-service';
+import { tmdbAdapter } from '@/infrastructure/external-sources/tmdb-adapter';
 import { normalizeMovieTitle } from '@/modules/ingestion/ingestion-service';
+import { resolvePosterUrl } from '@/lib/poster-utils';
 import { MovieLanguage, ReviewStatus, LifecycleStatus } from '@prisma/client';
 
 export type ClueDimensionStatus = 'PRESENT' | 'MISSING' | 'INCOMPLETE' | 'UNAVAILABLE';
+
+export type PrimaryRecoveryClass =
+  | 'READY_FOR_APPROVAL'
+  | 'TMDB_ENRICHMENT_CANDIDATE'
+  | 'TMDB_IDENTITY_RECOVERY_CANDIDATE'
+  | 'DUPLICATE_REVIEW_REQUIRED'
+  | 'ARTIFACT_REJECTION_CANDIDATE'
+  | 'MANUAL_REVIEW_REQUIRED';
+
+export function isScraperArtifact(title: string): boolean {
+  if (!title) return false;
+  const monthRegex = /^-\s*(January|February|March|April|May|June|July|August|September|October|November|December)[!\s]*$/i;
+  const wikiRegex = /\{\{|\}\}|\[\[|\]\]|\{\||\|\}|rowspan=|colspan=|style=|background:/i;
+  const newlineRegex = /[\r\n]/;
+  const knownActorNames = ['dharmavarapu subramanyam', 'srihari'];
+
+  return (
+    monthRegex.test(title) ||
+    wikiRegex.test(title) ||
+    newlineRegex.test(title) ||
+    knownActorNames.includes(title.toLowerCase().trim())
+  );
+}
+
+export function classifyPendingMovie(
+  movie: any,
+  clueAnalysis: MovieClueCoverageAnalysis,
+  hasSuspectedDuplicate: boolean
+): {
+  primaryClass: PrimaryRecoveryClass;
+  secondaryIssues: string[];
+} {
+  const secondaryIssues: string[] = [...clueAnalysis.reasons];
+  const isArtifact = isScraperArtifact(movie.primaryTitle);
+
+  if (isArtifact) {
+    if (!secondaryIssues.includes('SCRAPER_ARTIFACT_DETECTED')) {
+      secondaryIssues.push('SCRAPER_ARTIFACT_DETECTED');
+    }
+    return {
+      primaryClass: 'ARTIFACT_REJECTION_CANDIDATE',
+      secondaryIssues,
+    };
+  }
+
+  if (hasSuspectedDuplicate) {
+    if (!secondaryIssues.includes('POTENTIAL_DUPLICATE_COLLISION')) {
+      secondaryIssues.push('POTENTIAL_DUPLICATE_COLLISION');
+    }
+    return {
+      primaryClass: 'DUPLICATE_REVIEW_REQUIRED',
+      secondaryIssues,
+    };
+  }
+
+  if (clueAnalysis.isTargetPlayable && movie.posterAsset) {
+    return {
+      primaryClass: 'READY_FOR_APPROVAL',
+      secondaryIssues,
+    };
+  }
+
+  if (movie.tmdbId) {
+    return {
+      primaryClass: 'TMDB_ENRICHMENT_CANDIDATE',
+      secondaryIssues,
+    };
+  }
+
+  const people = movie.people || [];
+  const hasDirector = people.some(
+    (p: any) => p.roleType === 'DIRECTOR' || p.job === 'Director'
+  );
+  const normTitle = normalizeMovieTitle(movie.primaryTitle);
+  const isCleanTitle = normTitle.length >= 2 && !movie.primaryTitle.includes('+');
+
+  if (hasDirector && isCleanTitle) {
+    return {
+      primaryClass: 'TMDB_IDENTITY_RECOVERY_CANDIDATE',
+      secondaryIssues,
+    };
+  }
+
+  if (!hasDirector && !secondaryIssues.includes('MISSING_DIRECTOR')) {
+    secondaryIssues.push('MISSING_DIRECTOR');
+  }
+  if (!isCleanTitle && !secondaryIssues.includes('UNCONVENTIONAL_TITLE')) {
+    secondaryIssues.push('UNCONVENTIONAL_TITLE');
+  }
+
+  return {
+    primaryClass: 'MANUAL_REVIEW_REQUIRED',
+    secondaryIssues,
+  };
+}
 
 export function normalizeMovieLanguage(lang?: string): MovieLanguage | null {
   if (!lang) return null;
@@ -58,6 +156,7 @@ export interface ReviewQueueFilterOptions {
   playableStatus?: 'TARGET' | 'GUESS' | 'BOTH' | 'NEITHER';
   hasPoster?: boolean;
   hasTmdbId?: boolean;
+  recoveryClass?: PrimaryRecoveryClass;
   sort?: 'newest' | 'oldest' | 'title_asc' | 'title_desc' | 'year_desc' | 'year_asc';
   page?: number;
   limit?: number;
@@ -85,6 +184,8 @@ export interface ReviewQueueItem {
   genres: string[];
   hasPoster: boolean;
   hasTmdbId: boolean;
+  primaryRecoveryClass: PrimaryRecoveryClass;
+  secondaryIssues: string[];
   updatedAt: string;
 }
 
@@ -163,6 +264,8 @@ export interface ReviewDetailPayload {
     isTarget: boolean;
   };
   suspectedDuplicates: SuspectedDuplicate[];
+  primaryRecoveryClass: PrimaryRecoveryClass;
+  secondaryIssues: string[];
   candidateProvenance: {
     source?: string;
     sourceMovieId?: string;
@@ -170,6 +273,60 @@ export interface ReviewDetailPayload {
     discoveryReason?: string;
     duplicateOfMovieId?: string | null;
   } | null;
+}
+
+export interface TmdbIdentityResolutionResult {
+  movieId: string;
+  primaryTitle: string;
+  releaseYear: number;
+  status: 'MATCHED' | 'AMBIGUOUS' | 'NOT_FOUND';
+  dryRun: boolean;
+  matchedTmdbId?: number;
+  matchedTitle?: string;
+  matchedYear?: number;
+  confidence?: 'HIGH' | 'EXACT';
+  candidates?: Array<{
+    id: number;
+    title: string;
+    releaseYear: number;
+    originalLanguage: string;
+    popularity?: number;
+  }>;
+  enriched?: boolean;
+  newTargetPlayable?: boolean;
+  message: string;
+}
+
+export interface ArtifactScanResult {
+  mode: 'DRY_RUN' | 'LIVE';
+  totalFound: number;
+  rejectedCount: number;
+  artifacts: Array<{
+    id: string;
+    primaryTitle: string;
+    releaseYear: number;
+    artifactReason: string;
+  }>;
+}
+
+export interface DuplicateScanResult {
+  mode: 'DRY_RUN' | 'LIVE';
+  totalFound: number;
+  duplicates: Array<{
+    pendingMovie: {
+      id: string;
+      primaryTitle: string;
+      releaseYear: number;
+      tmdbId: number | null;
+    };
+    canonicalMatches: Array<{
+      id: string;
+      primaryTitle: string;
+      releaseYear: number;
+      tmdbId: number | null;
+      matchType: string;
+    }>;
+  }>;
 }
 
 export interface ReviewQueueStats {
@@ -190,6 +347,7 @@ export interface ReviewQueueStats {
   missingPoster: number;
   missingTmdb: number;
   potentialDuplicates: number;
+  recoveryBreakdown: Record<PrimaryRecoveryClass, number>;
 }
 
 export class CatalogReviewService {
@@ -409,6 +567,43 @@ export class CatalogReviewService {
   }
 
   /**
+   * Helper to retrieve IDs of all pending movies that have suspected duplicates among approved active movies.
+   */
+  async getSuspectedDuplicatePendingIds(): Promise<Set<string>> {
+    const [pending, approved] = await Promise.all([
+      prisma.movie.findMany({
+        where: { eligibility: { reviewStatus: 'PENDING' } },
+        select: { id: true, primaryTitle: true, releaseYear: true },
+      }),
+      prisma.movie.findMany({
+        where: { eligibility: { reviewStatus: 'APPROVED' }, lifecycleStatus: 'ACTIVE' },
+        select: { primaryTitle: true, releaseYear: true },
+      }),
+    ]);
+
+    const approvedMap = new Map<string, number[]>();
+    for (const a of approved) {
+      const norm = normalizeMovieTitle(a.primaryTitle);
+      if (norm.length >= 3) {
+        if (!approvedMap.has(norm)) approvedMap.set(norm, []);
+        approvedMap.get(norm)!.push(a.releaseYear);
+      }
+    }
+
+    const dupIds = new Set<string>();
+    for (const p of pending) {
+      if (isScraperArtifact(p.primaryTitle)) continue;
+      const norm = normalizeMovieTitle(p.primaryTitle);
+      if (norm.length >= 3 && approvedMap.has(norm)) {
+        if (approvedMap.get(norm)!.some((year) => Math.abs(year - p.releaseYear) <= 1)) {
+          dupIds.add(p.id);
+        }
+      }
+    }
+    return dupIds;
+  }
+
+  /**
    * Get paginated review queue with rich filtering.
    */
   async getReviewQueue(options: ReviewQueueFilterOptions = {}): Promise<{
@@ -481,6 +676,91 @@ export class CatalogReviewService {
     if (options.sort === 'year_desc') orderBy = { releaseYear: 'desc' };
     if (options.sort === 'year_asc') orderBy = { releaseYear: 'asc' };
 
+    const duplicateIds = await this.getSuspectedDuplicatePendingIds();
+
+    // If recoveryClass or reason filter is requested, evaluate and filter in memory
+    if (options.recoveryClass || options.reason) {
+      const allMatching = await prisma.movie.findMany({
+        where,
+        include: {
+          eligibility: true,
+          people: {
+            include: { person: { select: { canonicalName: true } } },
+          },
+          genres: {
+            include: { genre: { select: { canonicalName: true } } },
+          },
+        },
+        orderBy,
+      });
+
+      const allItems: ReviewQueueItem[] = allMatching.map((m) => {
+        const analysis = this.evaluateClueCoverage(m);
+        const isSuspectedDup = duplicateIds.has(m.id);
+        const classification = classifyPendingMovie(m, analysis, isSuspectedDup);
+
+        const directors = (m.people || [])
+          .filter((p) => p.roleType === 'DIRECTOR' || p.job === 'Director')
+          .map((p) => p.person?.canonicalName)
+          .filter(Boolean);
+
+        const leadActors = (m.people || [])
+          .filter((p) => ['LEAD_ACTOR', 'LEAD_ACTRESS', 'LEAD', 'CAST'].includes(p.roleType))
+          .map((p) => p.person?.canonicalName)
+          .filter(Boolean);
+
+        const genres = (m.genres || [])
+          .map((g) => g.genre?.canonicalName)
+          .filter(Boolean);
+
+        return {
+          id: m.id,
+          primaryTitle: m.primaryTitle,
+          originalTitle: m.originalTitle,
+          releaseYear: m.releaseYear,
+          supportedLanguages: m.supportedLanguages,
+          posterAsset: m.posterAsset,
+          tmdbId: m.tmdbId,
+          imdbId: m.imdbId,
+          wikidataId: m.wikidataId,
+          reviewStatus: m.eligibility?.reviewStatus || 'PENDING',
+          lifecycleStatus: m.lifecycleStatus,
+          playableAsGuess: m.eligibility?.playableAsGuess ?? true,
+          playableAsTarget: m.eligibility?.playableAsTarget ?? false,
+          reasons: classification.secondaryIssues,
+          missingClues: analysis.missingClues,
+          clueScore: analysis.score,
+          directors,
+          leadActors,
+          genres,
+          hasPoster: !!m.posterAsset,
+          hasTmdbId: !!m.tmdbId,
+          primaryRecoveryClass: classification.primaryClass,
+          secondaryIssues: classification.secondaryIssues,
+          updatedAt: m.updatedAt.toISOString(),
+        };
+      });
+
+      let filtered = allItems;
+      if (options.recoveryClass) {
+        filtered = filtered.filter((i) => i.primaryRecoveryClass === options.recoveryClass);
+      }
+      if (options.reason) {
+        filtered = filtered.filter((i) => i.reasons.includes(options.reason!));
+      }
+
+      const totalFiltered = filtered.length;
+      const paginatedItems = filtered.slice(skip, skip + limit);
+
+      return {
+        items: paginatedItems,
+        total: totalFiltered,
+        page,
+        limit,
+        totalPages: Math.ceil(totalFiltered / limit) || 1,
+      };
+    }
+
     const [rawMovies, total] = await Promise.all([
       prisma.movie.findMany({
         where,
@@ -502,6 +782,8 @@ export class CatalogReviewService {
 
     const items: ReviewQueueItem[] = rawMovies.map((m) => {
       const analysis = this.evaluateClueCoverage(m);
+      const isSuspectedDup = duplicateIds.has(m.id);
+      const classification = classifyPendingMovie(m, analysis, isSuspectedDup);
 
       const directors = (m.people || [])
         .filter((p) => p.roleType === 'DIRECTOR' || p.job === 'Director')
@@ -531,7 +813,7 @@ export class CatalogReviewService {
         lifecycleStatus: m.lifecycleStatus,
         playableAsGuess: m.eligibility?.playableAsGuess ?? true,
         playableAsTarget: m.eligibility?.playableAsTarget ?? false,
-        reasons: analysis.reasons,
+        reasons: classification.secondaryIssues,
         missingClues: analysis.missingClues,
         clueScore: analysis.score,
         directors,
@@ -539,17 +821,14 @@ export class CatalogReviewService {
         genres,
         hasPoster: !!m.posterAsset,
         hasTmdbId: !!m.tmdbId,
+        primaryRecoveryClass: classification.primaryClass,
+        secondaryIssues: classification.secondaryIssues,
         updatedAt: m.updatedAt.toISOString(),
       };
     });
 
-    // If reason filter was provided, filter memory list if needed
-    const filteredItems = options.reason
-      ? items.filter((item) => item.reasons.includes(options.reason!))
-      : items;
-
     return {
-      items: filteredItems,
+      items,
       total,
       page,
       limit,
@@ -703,6 +982,9 @@ export class CatalogReviewService {
         })
       : null;
 
+    const hasSuspectedDuplicate = suspectedDuplicates.length > 0;
+    const classification = classifyPendingMovie(movie, clueAnalysis, hasSuspectedDuplicate);
+
     return {
       movie: {
         id: movie.id,
@@ -763,6 +1045,8 @@ export class CatalogReviewService {
         isTarget: dailyPuzzles > 0 || challenges > 0 || games > 0,
       },
       suspectedDuplicates,
+      primaryRecoveryClass: classification.primaryClass,
+      secondaryIssues: classification.secondaryIssues,
       candidateProvenance: candidate
         ? {
             source: candidate.source,
@@ -818,6 +1102,29 @@ export class CatalogReviewService {
       MISSING_EXTERNAL_ID: 0,
     };
 
+    const recoveryBreakdown: Record<PrimaryRecoveryClass, number> = {
+      READY_FOR_APPROVAL: 0,
+      TMDB_ENRICHMENT_CANDIDATE: 0,
+      TMDB_IDENTITY_RECOVERY_CANDIDATE: 0,
+      DUPLICATE_REVIEW_REQUIRED: 0,
+      ARTIFACT_REJECTION_CANDIDATE: 0,
+      MANUAL_REVIEW_REQUIRED: 0,
+    };
+
+    // Approved canonical movies for duplicate detection
+    const approvedMovies = await prisma.movie.findMany({
+      where: { eligibility: { reviewStatus: 'APPROVED' }, lifecycleStatus: 'ACTIVE' },
+      select: { primaryTitle: true, releaseYear: true },
+    });
+    const approvedMap = new Map<string, number[]>();
+    for (const a of approvedMovies) {
+      const norm = normalizeMovieTitle(a.primaryTitle);
+      if (norm.length >= 3) {
+        if (!approvedMap.has(norm)) approvedMap.set(norm, []);
+        approvedMap.get(norm)!.push(a.releaseYear);
+      }
+    }
+
     for (const e of pendingEligibilities) {
       const m = e.movie;
       if (!m) continue;
@@ -852,6 +1159,15 @@ export class CatalogReviewService {
       if (!m.posterAsset) byReason.MISSING_POSTER++;
       if (!m.tmdbId) byReason.MISSING_EXTERNAL_ID++;
       if (!isTarget) byReason.INSUFFICIENT_CLUE_COVERAGE++;
+
+      // Duplicate check & Primary recovery classification
+      const norm = normalizeMovieTitle(m.primaryTitle);
+      const isSuspectedDup = norm.length >= 3 && approvedMap.has(norm) &&
+        approvedMap.get(norm)!.some((year) => Math.abs(year - m.releaseYear) <= 1);
+
+      const clueAnalysis = this.evaluateClueCoverage(m);
+      const classification = classifyPendingMovie(m, clueAnalysis, isSuspectedDup);
+      recoveryBreakdown[classification.primaryClass]++;
     }
 
     const potentialDuplicates = await prisma.ingestionCandidate.count({
@@ -873,6 +1189,7 @@ export class CatalogReviewService {
       missingPoster,
       missingTmdb,
       potentialDuplicates,
+      recoveryBreakdown,
     };
   }
 
@@ -1342,7 +1659,13 @@ export class CatalogReviewService {
   /**
    * Request single-movie enrichment on demand from review queue.
    */
-  async enrichSingleMovie(movieId: string, actorId = 'admin'): Promise<EnrichmentResult> {
+  async enrichSingleMovie(
+    movieId: string,
+    optionsOrActorId?: string | { dryRun?: boolean; actorId?: string }
+  ): Promise<EnrichmentResult> {
+    const actorId = typeof optionsOrActorId === 'string' ? optionsOrActorId : (optionsOrActorId?.actorId || 'admin');
+    const dryRun = typeof optionsOrActorId === 'object' && optionsOrActorId.dryRun === true;
+
     const movie = await prisma.movie.findUnique({
       where: { id: movieId },
       include: { eligibility: true },
@@ -1353,21 +1676,482 @@ export class CatalogReviewService {
     }
 
     const before = movie.eligibility;
-    const res = await enrichmentService.enrichMovie(movieId);
+    const res = await enrichmentService.enrichMovie(movieId, { dryRun });
 
-    const after = await prisma.gameEligibility.findUnique({ where: { movieId } });
+    if (!dryRun) {
+      // Also if movie had no poster, attempt single poster enrichment
+      if (!movie.posterAsset && movie.tmdbId) {
+        try {
+          await posterEnrichmentService.enrichMoviePoster(movieId, { dryRun: false });
+        } catch {
+          // Poster lookup is best-effort
+        }
+      }
 
-    await this.logAudit({
-      actorId,
-      action: 'ENRICH_MOVIE_SINGLE',
-      entityType: 'Movie',
-      entityId: movieId,
-      before,
-      after,
-      reason: res.reason || 'Single movie enrichment from review queue',
-    });
+      const after = await prisma.gameEligibility.findUnique({ where: { movieId } });
+
+      await this.logAudit({
+        actorId,
+        action: 'ENRICH_MOVIE_SINGLE',
+        entityType: 'Movie',
+        entityId: movieId,
+        before,
+        after,
+        reason: res.reason || 'Single movie enrichment from review queue',
+      });
+    }
 
     return res;
+  }
+
+  /**
+   * TMDB Identity Recovery:
+   * Deterministically resolves external TMDB identity for movies lacking a TMDB ID.
+   * Matches candidate results using exact/normalized title, release year proximity (<= 1), and language.
+   * Categorizes outcome as MATCHED, AMBIGUOUS, or NOT_FOUND.
+   * Zero writes when dryRun = true.
+   */
+  async resolveTmdbIdentity(
+    movieId: string,
+    options: { dryRun?: boolean; actorId?: string } = {}
+  ): Promise<TmdbIdentityResolutionResult> {
+    const dryRun = options.dryRun !== false;
+    const actorId = options.actorId || 'admin';
+
+    const movie = await prisma.movie.findUnique({
+      where: { id: movieId },
+      include: {
+        eligibility: true,
+        people: { include: { person: true } },
+        genres: { include: { genre: true } },
+      },
+    });
+
+    if (!movie) {
+      throw new AppError('MOVIE_NOT_FOUND', `Movie with ID ${movieId} not found`, 404);
+    }
+
+    // Safety checks
+    if (isScraperArtifact(movie.primaryTitle)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Cannot resolve TMDB identity for artifact candidate "${movie.primaryTitle}" (${movieId}). Route to artifact rejection.`,
+        400
+      );
+    }
+
+    if (movie.tmdbId) {
+      return {
+        movieId: movie.id,
+        primaryTitle: movie.primaryTitle,
+        releaseYear: movie.releaseYear,
+        status: 'MATCHED',
+        dryRun,
+        matchedTmdbId: movie.tmdbId,
+        matchedTitle: movie.primaryTitle,
+        matchedYear: movie.releaseYear,
+        confidence: 'EXACT',
+        message: `Movie already has TMDB ID ${movie.tmdbId}`,
+      };
+    }
+
+    // Determine query options
+    const query = movie.primaryTitle.trim();
+    const normTarget = normalizeMovieTitle(query);
+
+    // Multi-stage search strategy
+    // Stage 1: Exact title + year
+    let searchResponse = await tmdbAdapter.searchMovies(query, {
+      year: movie.releaseYear,
+    });
+
+    // Stage 2: Normalized title + year if 0 results
+    if (searchResponse.results.length === 0 && normTarget !== query.toLowerCase()) {
+      searchResponse = await tmdbAdapter.searchMovies(normTarget, {
+        year: movie.releaseYear,
+      });
+    }
+
+    // Stage 3: Title without year constraint if 0 results
+    if (searchResponse.results.length === 0) {
+      searchResponse = await tmdbAdapter.searchMovies(query);
+    }
+
+    const rawCandidates = searchResponse.results;
+    if (rawCandidates.length === 0) {
+      if (!dryRun) {
+        await prisma.gameEligibility.update({
+          where: { movieId },
+          data: { disabledReason: 'TMDB_NOT_FOUND', updatedAt: new Date() },
+        });
+        await this.logAudit({
+          actorId,
+          action: 'RESOLVE_TMDB_NOT_FOUND',
+          entityType: 'Movie',
+          entityId: movieId,
+          reason: `No TMDB match found for "${query}" (${movie.releaseYear})`,
+        });
+      }
+      return {
+        movieId: movie.id,
+        primaryTitle: movie.primaryTitle,
+        releaseYear: movie.releaseYear,
+        status: 'NOT_FOUND',
+        dryRun,
+        candidates: [],
+        message: `No TMDB search results found for "${query}" (${movie.releaseYear})`,
+      };
+    }
+
+    // Evaluate candidates with strict confidence rules
+    const evaluatedCandidates = rawCandidates.map((c) => {
+      const cYear = c.release_date ? parseInt(c.release_date.split('-')[0], 10) : 0;
+      const cNormTitle = normalizeMovieTitle(c.title);
+      const cNormOrig = normalizeMovieTitle(c.original_title);
+      const titleExact = cNormTitle === normTarget || cNormOrig === normTarget;
+      const titleContains = cNormTitle.includes(normTarget) || normTarget.includes(cNormTitle);
+      const yearDiff = cYear > 0 ? Math.abs(cYear - movie.releaseYear) : 999;
+      const langMatch =
+        (movie.supportedLanguages.includes('TELUGU') && c.original_language === 'te') ||
+        (movie.supportedLanguages.includes('HINDI') && c.original_language === 'hi');
+
+      let confidenceScore = 0;
+      if (titleExact) confidenceScore += 50;
+      else if (titleContains) confidenceScore += 20;
+
+      if (yearDiff === 0) confidenceScore += 30;
+      else if (yearDiff === 1) confidenceScore += 20;
+      else if (yearDiff <= 2) confidenceScore += 5;
+
+      if (langMatch) confidenceScore += 20;
+
+      return {
+        candidate: c,
+        year: cYear,
+        confidenceScore,
+        titleExact,
+        yearDiff,
+        langMatch,
+      };
+    });
+
+    // High confidence matches: (titleExact && yearDiff <= 1) || (confidenceScore >= 80)
+    const highConfidence = evaluatedCandidates.filter(
+      (ec) => (ec.titleExact && ec.yearDiff <= 1) || ec.confidenceScore >= 80
+    );
+
+    if (highConfidence.length === 1) {
+      const top = highConfidence[0];
+      const matched = top.candidate;
+
+      if (!dryRun) {
+        // Safe live mutation
+        // 1. Assign TMDB ID and poster if movie lacks poster
+        const posterUrl = !movie.posterAsset && matched.poster_path
+          ? resolvePosterUrl(matched.poster_path)
+          : undefined;
+
+        await prisma.movie.update({
+          where: { id: movieId },
+          data: {
+            tmdbId: matched.id,
+            ...(posterUrl ? { posterAsset: posterUrl } : {}),
+          },
+        });
+
+        // 2. Preserve provenance in IngestionCandidate
+        await prisma.ingestionCandidate.upsert({
+          where: {
+            source_sourceMovieId: {
+              source: 'TMDB',
+              sourceMovieId: String(matched.id),
+            },
+          },
+          create: {
+            source: 'TMDB',
+            sourceMovieId: String(matched.id),
+            status: 'VALIDATED',
+            discoveryReason: 'RECOVERY_RESOLVER',
+            resolutionReason: `Resolved to canonical movie ${movie.primaryTitle} (${movieId})`,
+            processedAt: new Date(),
+          },
+          update: {
+            status: 'VALIDATED',
+            resolutionReason: `Resolved to canonical movie ${movie.primaryTitle} (${movieId})`,
+            processedAt: new Date(),
+          },
+        });
+
+        // 3. Enrich movie metadata (credits, genres, cast, etc.)
+        await enrichmentService.enrichMovie(movieId);
+
+        // 4. If movie lacked poster and still lacks poster, attempt single poster enrichment
+        const reloaded = await prisma.movie.findUnique({
+          where: { id: movieId },
+          include: { eligibility: true, people: true, genres: true },
+        });
+
+        if (!reloaded?.posterAsset && matched.poster_path) {
+          await posterEnrichmentService.enrichMoviePoster(movieId, { dryRun: false });
+        }
+
+        // 5. Recalculate clue coverage and playability
+        const updatedMovie = await prisma.movie.findUnique({
+          where: { id: movieId },
+          include: { eligibility: true, people: true, genres: true },
+        });
+        const clueAnalysis = this.evaluateClueCoverage(updatedMovie);
+
+        await prisma.gameEligibility.upsert({
+          where: { movieId },
+          create: {
+            movieId,
+            playableAsGuess: true,
+            playableAsTarget: clueAnalysis.isTargetPlayable,
+            minimumMetadataComplete: clueAnalysis.isTargetPlayable,
+            reviewStatus: clueAnalysis.isTargetPlayable ? 'APPROVED' : 'PENDING',
+            disabledReason: clueAnalysis.isTargetPlayable ? null : 'INSUFFICIENT_CLUE_COVERAGE',
+            updatedAt: new Date(),
+          },
+          update: {
+            playableAsGuess: true,
+            playableAsTarget: clueAnalysis.isTargetPlayable,
+            minimumMetadataComplete: clueAnalysis.isTargetPlayable,
+            reviewStatus: clueAnalysis.isTargetPlayable ? 'APPROVED' : 'PENDING',
+            disabledReason: clueAnalysis.isTargetPlayable ? null : 'INSUFFICIENT_CLUE_COVERAGE',
+            updatedAt: new Date(),
+          },
+        });
+
+        // 6. Log Audit record
+        await this.logAudit({
+          actorId,
+          action: 'RESOLVE_TMDB_IDENTITY',
+          entityType: 'Movie',
+          entityId: movieId,
+          before: { tmdbId: null, reviewStatus: movie.eligibility?.reviewStatus },
+          after: {
+            tmdbId: matched.id,
+            matchedTitle: matched.title,
+            isTargetPlayable: clueAnalysis.isTargetPlayable,
+          },
+          reason: `Resolved TMDB identity to ID ${matched.id} (${matched.title}) with confidence score ${top.confidenceScore}`,
+        });
+
+        return {
+          movieId: movie.id,
+          primaryTitle: movie.primaryTitle,
+          releaseYear: movie.releaseYear,
+          status: 'MATCHED',
+          dryRun: false,
+          matchedTmdbId: matched.id,
+          matchedTitle: matched.title,
+          matchedYear: top.year,
+          confidence: top.yearDiff === 0 && top.titleExact ? 'EXACT' : 'HIGH',
+          enriched: true,
+          newTargetPlayable: clueAnalysis.isTargetPlayable,
+          message: `Successfully resolved and enriched TMDB ID ${matched.id} (${matched.title})`,
+        };
+      }
+
+      return {
+        movieId: movie.id,
+        primaryTitle: movie.primaryTitle,
+        releaseYear: movie.releaseYear,
+        status: 'MATCHED',
+        dryRun: true,
+        matchedTmdbId: matched.id,
+        matchedTitle: matched.title,
+        matchedYear: top.year,
+        confidence: top.yearDiff === 0 && top.titleExact ? 'EXACT' : 'HIGH',
+        message: `[DRY-RUN] High confidence match found: TMDB ID ${matched.id} (${matched.title}, ${top.year})`,
+      };
+    }
+
+    if (highConfidence.length > 1 || evaluatedCandidates.length > 0) {
+      const candidates = evaluatedCandidates.slice(0, 5).map((ec) => ({
+        id: ec.candidate.id,
+        title: ec.candidate.title,
+        releaseYear: ec.year,
+        originalLanguage: ec.candidate.original_language,
+        popularity: ec.candidate.popularity,
+      }));
+
+      if (!dryRun) {
+        await prisma.gameEligibility.update({
+          where: { movieId },
+          data: { disabledReason: 'AMBIGUOUS_TMDB_MATCH', updatedAt: new Date() },
+        });
+        await this.logAudit({
+          actorId,
+          action: 'RESOLVE_TMDB_AMBIGUOUS',
+          entityType: 'Movie',
+          entityId: movieId,
+          reason: `Ambiguous TMDB search results (${candidates.length} candidates) for "${query}" (${movie.releaseYear})`,
+        });
+      }
+
+      return {
+        movieId: movie.id,
+        primaryTitle: movie.primaryTitle,
+        releaseYear: movie.releaseYear,
+        status: 'AMBIGUOUS',
+        dryRun,
+        candidates,
+        message: `Ambiguous match: Found ${evaluatedCandidates.length} potential candidates for "${query}" (${movie.releaseYear})`,
+      };
+    }
+
+    return {
+      movieId: movie.id,
+      primaryTitle: movie.primaryTitle,
+      releaseYear: movie.releaseYear,
+      status: 'NOT_FOUND',
+      dryRun,
+      candidates: [],
+      message: `No confident TMDB matches found for "${query}" (${movie.releaseYear})`,
+    };
+  }
+
+  /**
+   * Scans the pending review queue for scraper artifacts.
+   * If dryRun = false, explicitly rejects each detected artifact and writes an AuditLog.
+   */
+  async scanArtifacts(
+    options: { dryRun?: boolean; limit?: number; actorId?: string } = {}
+  ): Promise<ArtifactScanResult> {
+    const dryRun = options.dryRun !== false;
+    const limit = options.limit || 100;
+    const actorId = options.actorId || 'admin';
+
+    const pending = await prisma.movie.findMany({
+      where: { eligibility: { reviewStatus: 'PENDING' } },
+      select: {
+        id: true,
+        primaryTitle: true,
+        releaseYear: true,
+        eligibility: true,
+      },
+      orderBy: { releaseYear: 'desc' },
+    });
+
+    const detectedArtifacts: Array<{
+      id: string;
+      primaryTitle: string;
+      releaseYear: number;
+      artifactReason: string;
+    }> = [];
+
+    const monthRegex = /^-\s*(January|February|March|April|May|June|July|August|September|October|November|December)[!\s]*$/i;
+    const wikiRegex = /\{\{|\}\}|\[\[|\]\]|\{\||\|\}|rowspan=|colspan=|style=|background:/i;
+    const newlineRegex = /[\r\n]/;
+    const knownActorNames = ['dharmavarapu subramanyam', 'srihari'];
+
+    for (const m of pending) {
+      let reason: string | null = null;
+      if (monthRegex.test(m.primaryTitle)) {
+        reason = 'Calendar month header scraper artifact';
+      } else if (wikiRegex.test(m.primaryTitle)) {
+        reason = 'Wikitext markup / template fragment artifact';
+      } else if (newlineRegex.test(m.primaryTitle)) {
+        reason = 'Malformed title containing newline characters';
+      } else if (knownActorNames.includes(m.primaryTitle.toLowerCase().trim())) {
+        reason = 'Actor name scraped as film title artifact';
+      }
+
+      if (reason) {
+        detectedArtifacts.push({
+          id: m.id,
+          primaryTitle: m.primaryTitle,
+          releaseYear: m.releaseYear,
+          artifactReason: reason,
+        });
+      }
+    }
+
+    const targetList = detectedArtifacts.slice(0, limit);
+    let rejectedCount = 0;
+
+    if (!dryRun) {
+      for (const item of targetList) {
+        await this.rejectMovie(item.id, `Artifact rejection: ${item.artifactReason}`, actorId);
+        rejectedCount++;
+      }
+    }
+
+    return {
+      mode: dryRun ? 'DRY_RUN' : 'LIVE',
+      totalFound: detectedArtifacts.length,
+      rejectedCount: dryRun ? 0 : rejectedCount,
+      artifacts: targetList,
+    };
+  }
+
+  /**
+   * Scans pending movies against approved active movies to identify suspected duplicates.
+   */
+  async scanDuplicates(
+    options: { dryRun?: boolean; limit?: number; actorId?: string } = {}
+  ): Promise<DuplicateScanResult> {
+    const dryRun = options.dryRun !== false;
+    const limit = options.limit || 50;
+
+    const [pending, approved] = await Promise.all([
+      prisma.movie.findMany({
+        where: { eligibility: { reviewStatus: 'PENDING' } },
+        select: { id: true, primaryTitle: true, releaseYear: true, tmdbId: true },
+      }),
+      prisma.movie.findMany({
+        where: { eligibility: { reviewStatus: 'APPROVED' }, lifecycleStatus: 'ACTIVE' },
+        select: { id: true, primaryTitle: true, releaseYear: true, tmdbId: true },
+      }),
+    ]);
+
+    const approvedMap = new Map<string, typeof approved>();
+    for (const a of approved) {
+      const norm = normalizeMovieTitle(a.primaryTitle);
+      if (norm.length >= 3) {
+        if (!approvedMap.has(norm)) approvedMap.set(norm, []);
+        approvedMap.get(norm)!.push(a);
+      }
+    }
+
+    const duplicates: DuplicateScanResult['duplicates'] = [];
+
+    for (const p of pending) {
+      if (isScraperArtifact(p.primaryTitle)) continue;
+
+      const norm = normalizeMovieTitle(p.primaryTitle);
+      if (norm.length >= 3 && approvedMap.has(norm)) {
+        const matches = approvedMap
+          .get(norm)!
+          .filter((a) => Math.abs(a.releaseYear - p.releaseYear) <= 1);
+
+        if (matches.length > 0) {
+          duplicates.push({
+            pendingMovie: {
+              id: p.id,
+              primaryTitle: p.primaryTitle,
+              releaseYear: p.releaseYear,
+              tmdbId: p.tmdbId,
+            },
+            canonicalMatches: matches.map((m) => ({
+              id: m.id,
+              primaryTitle: m.primaryTitle,
+              releaseYear: m.releaseYear,
+              tmdbId: m.tmdbId,
+              matchType: 'NORMALIZED_TITLE_YEAR',
+            })),
+          });
+        }
+      }
+    }
+
+    return {
+      mode: dryRun ? 'DRY_RUN' : 'LIVE',
+      totalFound: duplicates.length,
+      duplicates: duplicates.slice(0, limit),
+    };
   }
 
   /**

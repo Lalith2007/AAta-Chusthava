@@ -62,6 +62,20 @@ export interface TmdbDiscoveryOptions {
   page?: number;
 }
 
+export interface TmdbSearchResult {
+  id: number;
+  title: string;
+  original_title: string;
+  original_language: string;
+  release_date: string;
+  overview?: string;
+  popularity?: number;
+  vote_average?: number;
+  vote_count?: number;
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+}
+
 export interface MovieDataSource {
   discoverMovies(
     language: string,
@@ -71,6 +85,10 @@ export interface MovieDataSource {
   discover?(
     options: TmdbDiscoveryOptions
   ): Promise<{ results: DiscoveredMovieSummary[]; totalPages: number; totalResults: number }>;
+  searchMovies?(
+    query: string,
+    options?: { year?: number; language?: string; page?: number }
+  ): Promise<{ results: TmdbSearchResult[]; totalPages: number; totalResults: number }>;
   getMovieDetails(sourceMovieId: string): Promise<TmdbMovieDetails>;
   getCredits(sourceMovieId: string): Promise<TmdbCredits>;
   getAlternativeTitles(sourceMovieId: string): Promise<string[]>;
@@ -232,6 +250,103 @@ export class TmdbAdapter implements MovieDataSource {
       popularity: item.popularity,
       voteAverage: item.vote_average,
       voteCount: item.vote_count,
+    }));
+
+    return {
+      results,
+      totalPages: data.total_pages || 1,
+      totalResults: data.total_results || results.length,
+    };
+  }
+
+  async searchMovies(
+    query: string,
+    options?: { year?: number; language?: string; page?: number }
+  ): Promise<{ results: TmdbSearchResult[]; totalPages: number; totalResults: number }> {
+    const { year, language, page = 1 } = options || {};
+
+    if (!this.isConfigured()) {
+      const qLower = query.toLowerCase().trim();
+      const pageSize = 20;
+      const matches = HISTORICAL_CATALOG.filter((m) => {
+        if (language && m.details.original_language !== language) return false;
+        const movieYear = parseInt(m.details.release_date.split('-')[0], 10);
+        if (year && movieYear !== year) return false;
+        const titleMatch =
+          m.details.title.toLowerCase().includes(qLower) ||
+          m.details.original_title.toLowerCase().includes(qLower);
+        return titleMatch;
+      });
+
+      const totalResults = matches.length;
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+      const startIdx = (page - 1) * pageSize;
+      const pageMatches = matches.slice(startIdx, startIdx + pageSize);
+
+      const results: TmdbSearchResult[] = pageMatches.map((m) => ({
+        id: m.details.id,
+        title: m.details.title,
+        original_title: m.details.original_title,
+        original_language: m.details.original_language,
+        release_date: m.details.release_date,
+        overview: m.details.overview,
+        popularity: (m.details.vote_count || 0) / 100,
+        vote_average: m.details.vote_average,
+        vote_count: m.details.vote_count,
+        poster_path: m.details.poster_path,
+        backdrop_path: m.details.backdrop_path,
+      }));
+
+      return {
+        results,
+        totalPages,
+        totalResults,
+      };
+    }
+
+    const queryParams: Record<string, string | number> = {
+      query,
+      page,
+    };
+    if (year) {
+      queryParams['primary_release_year'] = year;
+    }
+    if (language) {
+      queryParams['language'] = language;
+    }
+
+    const url = this.getUrl('/search/movie', queryParams);
+    const res = await this.fetchWithRetry(url);
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(`TMDB authentication error (${res.status}): Invalid or unauthorized API credentials`);
+      }
+      if (res.status === 404) {
+        return { results: [], totalPages: 1, totalResults: 0 };
+      }
+      if (res.status === 429) {
+        throw new Error(`TMDB 429: Rate limit exceeded`);
+      }
+      if (res.status >= 500) {
+        throw new Error(`TMDB 5xx (${res.status}): Server error ${res.statusText}`);
+      }
+      throw new Error(`TMDB searchMovies error: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    const results: TmdbSearchResult[] = (data.results || []).map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      original_title: item.original_title,
+      original_language: item.original_language,
+      release_date: item.release_date || '',
+      overview: item.overview,
+      popularity: item.popularity,
+      vote_average: item.vote_average,
+      vote_count: item.vote_count,
+      poster_path: item.poster_path,
+      backdrop_path: item.backdrop_path,
     }));
 
     return {

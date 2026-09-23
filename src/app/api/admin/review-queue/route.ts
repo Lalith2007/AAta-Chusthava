@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     const hasPoster = hasPosterParam !== null ? hasPosterParam === 'true' : undefined;
     const hasTmdbIdParam = searchParams.get('hasTmdbId');
     const hasTmdbId = hasTmdbIdParam !== null ? hasTmdbIdParam === 'true' : undefined;
+    const recoveryClass = (searchParams.get('recoveryClass') as any) || undefined;
     const sort = (searchParams.get('sort') as any) || 'newest';
     const pageStr = searchParams.get('page');
     const page = pageStr ? parseInt(pageStr, 10) : 1;
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
       playableStatus,
       hasPoster,
       hasTmdbId,
+      recoveryClass,
       sort,
       page,
       limit,
