@@ -40,9 +40,9 @@ async function main() {
   console.log('============================================================\n');
 
   try {
-    // 1. STATS
-    if (flags.stats || Object.keys(flags).length === 0) {
-      console.log('📊 Aggregating review queue statistics...');
+    // 1. STATS / RECOVERY STATS
+    if (flags['recovery-stats'] || flags.stats || Object.keys(flags).length === 0) {
+      console.log('📊 Aggregating review queue statistics & recovery breakdown...');
       const stats = await catalogReviewService.getReviewStats();
 
       console.log(`\nReview Queue Overview:`);
@@ -54,35 +54,54 @@ async function main() {
       console.log(`- Missing TMDB IDs:           ${stats.missingTmdb}`);
       console.log(`- Candidate Duplicates:       ${stats.potentialDuplicates}`);
 
-      console.log(`\nPending by Language:`);
-      console.log(`- Telugu:                     ${stats.byLanguage.telugu}`);
-      console.log(`- Hindi:                      ${stats.byLanguage.hindi}`);
-
-      console.log(`\nPending by Era:`);
-      console.log(`- 2002–2009:                  ${stats.byYearGroup['2002-2009']}`);
-      console.log(`- 2010–2019:                  ${stats.byYearGroup['2010-2019']}`);
-      console.log(`- 2020–2026:                  ${stats.byYearGroup['2020-2026']}`);
-
-      console.log(`\nPending by Clue Deficit / Reason:`);
-      for (const [reason, count] of Object.entries(stats.byReason)) {
-        console.log(`- ${reason.padEnd(28)}: ${count}`);
+      console.log(`\n🎯 Deterministic Primary Recovery Classification:`);
+      let recoverySum = 0;
+      for (const [recoveryClass, count] of Object.entries(stats.recoveryBreakdown)) {
+        recoverySum += count;
+        console.log(`- ${recoveryClass.padEnd(35)}: ${count}`);
       }
+      console.log(`------------------------------------------------------------`);
+      console.log(`Total Classified:                   ${recoverySum} / ${stats.totalPending}`);
+      if (recoverySum === stats.totalPending) {
+        console.log(`✔ Partition Integrity: 100% Deterministic & Mutually Exclusive Partition (Sum = ${recoverySum})`);
+      } else {
+        console.error(`❌ Partition Integrity Mismatch: sum (${recoverySum}) !== pending (${stats.totalPending})`);
+      }
+
+      if (!flags['recovery-stats']) {
+        console.log(`\nPending by Language:`);
+        console.log(`- Telugu:                     ${stats.byLanguage.telugu}`);
+        console.log(`- Hindi:                      ${stats.byLanguage.hindi}`);
+
+        console.log(`\nPending by Era:`);
+        console.log(`- 2002–2009:                  ${stats.byYearGroup['2002-2009']}`);
+        console.log(`- 2010–2019:                  ${stats.byYearGroup['2010-2019']}`);
+        console.log(`- 2020–2026:                  ${stats.byYearGroup['2020-2026']}`);
+
+        console.log(`\nPending by Clue Deficit / Reason:`);
+        for (const [reason, count] of Object.entries(stats.byReason)) {
+          console.log(`- ${reason.padEnd(28)}: ${count}`);
+        }
+      }
+
       console.log('\n============================================================');
       return;
     }
 
-    // 2. LIST
-    if (flags.list) {
+    // 2. RECOVERY LIST / QUEUE LIST
+    if (flags['recovery-list'] || flags.list) {
       const limit = flags.limit ? parseInt(flags.limit, 10) : 10;
       const page = flags.page ? parseInt(flags.page, 10) : 1;
       const lang = flags.language ? (flags.language.toLowerCase() === 'te' ? 'TELUGU' : 'HINDI') : undefined;
+      const recoveryClass = flags.class || flags['recovery-class'];
 
-      console.log(`📋 Listing pending review movies (page ${page}, limit ${limit})...\n`);
+      console.log(`📋 Listing pending review movies (page ${page}, limit ${limit}${recoveryClass ? `, class: ${recoveryClass}` : ''})...\n`);
       const queue = await catalogReviewService.getReviewQueue({
         limit,
         page,
         language: lang,
         reason: flags.reason,
+        recoveryClass,
         year: flags.year ? parseInt(flags.year, 10) : undefined,
         search: flags.search,
       });
@@ -90,6 +109,10 @@ async function main() {
       console.log(`Found ${queue.total} total items (Showing page ${queue.page}/${queue.totalPages}):\n`);
       for (const item of queue.items) {
         console.log(`[${item.id}] ${item.primaryTitle} (${item.releaseYear})`);
+        console.log(`  Recovery:   ${item.primaryRecoveryClass}`);
+        if (item.secondaryIssues && item.secondaryIssues.length > 0) {
+          console.log(`  Issues:     ${item.secondaryIssues.join(', ')}`);
+        }
         console.log(`  Languages:  ${item.supportedLanguages.join(', ')}`);
         console.log(`  TMDB ID:    ${item.tmdbId || 'NONE'}`);
         console.log(`  Poster:     ${item.posterAsset ? 'YES' : 'NONE'}`);
@@ -125,6 +148,10 @@ async function main() {
       console.log(`- Poster:           ${detail.movie.posterAsset || 'NONE'}`);
       console.log(`- Lifecycle:        ${detail.movie.lifecycleStatus}`);
 
+      console.log(`\nRecovery Classification:`);
+      console.log(`- Primary Class:    ${detail.primaryRecoveryClass}`);
+      console.log(`- Secondary Issues: ${detail.secondaryIssues.length > 0 ? detail.secondaryIssues.join(', ') : 'None'}`);
+
       console.log(`\n11-Clue Dimension Breakdown (Score: ${detail.clueAnalysis.score.present}/11):`);
       for (const [key, dim] of Object.entries(detail.clueAnalysis.dimensions)) {
         const statusEmoji = dim.status === 'PRESENT' ? '✅' : dim.status === 'INCOMPLETE' ? '⚠️' : '❌';
@@ -153,7 +180,79 @@ async function main() {
       return;
     }
 
-    // 4. APPROVE
+    // 4. RESOLVE TMDB IDENTITY
+    if (flags['resolve-tmdb']) {
+      const movieId = flags['resolve-tmdb'];
+      const dryRun = !flags.live;
+      console.log(`⚡ Resolving TMDB Identity for Movie ID: ${movieId} (${dryRun ? 'SIMULATION / DRY-RUN' : 'LIVE MUTATION'})...`);
+      const res = await catalogReviewService.resolveTmdbIdentity(movieId, {
+        dryRun,
+        actorId: 'cli-admin',
+      });
+
+      console.log('\n✔ TMDB Resolution Outcome:');
+      console.log(`- Status:              ${res.status}`);
+      console.log(`- Confidence:          ${res.confidence || 'N/A'}`);
+      console.log(`- Matched TMDB ID:     ${res.matchedTmdbId ?? 'NONE'}`);
+      console.log(`- Matched Title:       ${res.matchedTitle ?? 'N/A'}`);
+      console.log(`- Enriched:            ${res.enriched ? 'YES' : 'NO'}`);
+      console.log(`- Target Playable:     ${res.newTargetPlayable ? 'YES' : 'NO'}`);
+      console.log(`- Dry Run:             ${res.dryRun}`);
+      console.log(`- Details:             ${res.message}`);
+
+      if (res.candidates && res.candidates.length > 0) {
+        console.log(`\nCandidates Found (${res.candidates.length}):`);
+        for (const cand of res.candidates) {
+          console.log(`  - [TMDB ${cand.id}] ${cand.title} (${cand.releaseYear}) [Lang: ${cand.originalLanguage}]`);
+        }
+      }
+      return;
+    }
+
+    // 5. ARTIFACT SCAN
+    if (flags['artifact-scan']) {
+      const dryRun = !flags.live;
+      const limit = flags.limit ? parseInt(flags.limit, 10) : 100;
+      console.log(`⚡ Scanning review queue for malformed scraper artifacts (${dryRun ? 'DRY-RUN' : 'LIVE REJECTION'})...\n`);
+      const res = await catalogReviewService.scanArtifacts({
+        dryRun,
+        limit,
+        actorId: 'cli-admin',
+      });
+
+      console.log(`Artifact Scan Results:`);
+      console.log(`- Mode:                ${res.mode}`);
+      console.log(`- Total Identified:    ${res.totalFound}`);
+      console.log(`- Rejected (if live):  ${res.rejectedCount}`);
+      console.log(`\nIdentified Artifacts:`);
+      for (const a of res.artifacts) {
+        console.log(`- [${a.id}] "${a.primaryTitle}" (${a.releaseYear}) -> ${a.artifactReason}`);
+      }
+      return;
+    }
+
+    // 6. DUPLICATE SCAN
+    if (flags['duplicate-scan']) {
+      const limit = flags.limit ? parseInt(flags.limit, 10) : 50;
+      console.log(`⚡ Scanning review queue for suspected duplicates (read-only scan)...\n`);
+      const res = await catalogReviewService.scanDuplicates({
+        limit,
+      });
+
+      console.log(`Duplicate Scan Results:`);
+      console.log(`- Total Identified:    ${res.totalFound}`);
+      console.log(`\nSuspected Duplicate Cases:`);
+      for (const d of res.duplicates) {
+        console.log(`- Pending Movie:       [${d.pendingMovie.id}] "${d.pendingMovie.primaryTitle}" (${d.pendingMovie.releaseYear})`);
+        for (const c of d.canonicalMatches) {
+          console.log(`  Canonical Match:     [${c.id}] "${c.primaryTitle}" (${c.releaseYear}) [TMDB: ${c.tmdbId || 'NONE'}] - ${c.matchType}`);
+        }
+        console.log('------------------------------------------------------------');
+      }
+      return;
+    }
+
+    // 7. APPROVE
     if (flags.approve) {
       const movieId = flags.approve;
       console.log(`⚡ Approving movie ID: ${movieId}...`);
@@ -162,7 +261,7 @@ async function main() {
       return;
     }
 
-    // 5. REJECT
+    // 8. REJECT
     if (flags.reject) {
       const movieId = flags.reject;
       const reason = flags.reason || 'Rejected by CLI operator';
@@ -172,7 +271,7 @@ async function main() {
       return;
     }
 
-    // 6. RETURN TO REVIEW
+    // 9. RETURN TO REVIEW
     if (flags.return) {
       const movieId = flags.return;
       const reason = flags.reason || 'Returned to review queue by CLI operator';
@@ -182,13 +281,20 @@ async function main() {
       return;
     }
 
-    // 7. ENRICH SINGLE MOVIE
+    // 10. ENRICH SINGLE MOVIE
     if (flags.enrich) {
       const movieId = flags.enrich;
-      console.log(`⚡ Enriching single movie ID: ${movieId}...`);
-      const res = await catalogReviewService.enrichSingleMovie(movieId, 'cli-admin');
+      const dryRun = flags['dry-run'] || (!flags.live && flags.dryRun !== false && (flags['dry-run'] === true || !flags.live));
+      // If user passes --enrich=<id> --dry-run or without --live, handle appropriately
+      const isDry = flags['dry-run'] !== undefined ? Boolean(flags['dry-run']) : !flags.live;
+      console.log(`⚡ Enriching single movie ID: ${movieId} (${isDry ? 'SIMULATION / DRY-RUN' : 'LIVE MUTATION'})...`);
+      const res = await catalogReviewService.enrichSingleMovie(movieId, {
+        dryRun: isDry,
+        actorId: 'cli-admin',
+      });
       console.log('✔ Enrichment Outcome:');
       console.log(`- Title:               ${res.title} (${res.releaseYear})`);
+      console.log(`- Mode:                ${isDry ? 'DRY-RUN (Simulation)' : 'LIVE MUTATION'}`);
       console.log(`- TMDB Enriched:       ${res.enrichedFromTmdb}`);
       console.log(`- Wikidata Enriched:   ${res.enrichedFromWikidata}`);
       console.log(`- Target Playable:     ${res.previousTargetPlayable} -> ${res.newTargetPlayable}`);
@@ -199,7 +305,7 @@ async function main() {
       return;
     }
 
-    // 8. MERGE DUPLICATES
+    // 11. MERGE DUPLICATES
     if (flags.merge) {
       const primary = flags.primary;
       const duplicate = flags.duplicate;
@@ -214,7 +320,7 @@ async function main() {
       return;
     }
 
-    // 9. BATCH OPERATIONS
+    // 12. BATCH OPERATIONS
     if (flags.batch) {
       const dryRun = !flags.live;
       const limit = flags.limit ? parseInt(flags.limit, 10) : 20;
@@ -247,3 +353,4 @@ async function main() {
 }
 
 main();
+

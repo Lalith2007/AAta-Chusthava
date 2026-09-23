@@ -18,6 +18,7 @@ import {
   Layers,
   Shield,
   Film,
+  Compass,
 } from 'lucide-react';
 
 interface ReviewItem {
@@ -42,6 +43,8 @@ interface ReviewItem {
   genres: string[];
   hasPoster: boolean;
   hasTmdbId: boolean;
+  primaryRecoveryClass?: string;
+  secondaryIssues?: string[];
   updatedAt: string;
 }
 
@@ -66,6 +69,8 @@ interface ReviewDetailData {
     isTarget: boolean;
   };
   suspectedDuplicates: any[];
+  primaryRecoveryClass?: string;
+  secondaryIssues?: string[];
   candidateProvenance: any;
 }
 
@@ -81,6 +86,7 @@ export function ReviewQueueView() {
   const [search, setSearch] = useState('');
   const [language, setLanguage] = useState('');
   const [reason, setReason] = useState('');
+  const [recoveryClass, setRecoveryClass] = useState('');
   const [year, setYear] = useState('');
   const [posterFilter, setPosterFilter] = useState('');
   const [playableFilter, setPlayableFilter] = useState('');
@@ -114,6 +120,7 @@ export function ReviewQueueView() {
       if (search.trim()) params.set('search', search.trim());
       if (language) params.set('language', language);
       if (reason) params.set('reason', reason);
+      if (recoveryClass) params.set('recoveryClass', recoveryClass);
       if (year) params.set('year', year);
       if (posterFilter) params.set('hasPoster', posterFilter);
       if (playableFilter) params.set('playableStatus', playableFilter);
@@ -141,7 +148,7 @@ export function ReviewQueueView() {
 
   useEffect(() => {
     loadQueue();
-  }, [page, language, reason, year, posterFilter, playableFilter, sort]);
+  }, [page, language, reason, recoveryClass, year, posterFilter, playableFilter, sort]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,12 +197,38 @@ export function ReviewQueueView() {
       }
 
       setActionSuccess(`Successfully executed ${action}.`);
-      // Reload detail and queue
       await openDetailModal(selectedMovieId);
       loadQueue();
       loadStats();
     } catch (err: any) {
       setActionError(err.message || 'Action failed.');
+    } finally {
+      setIsExecutingAction(false);
+    }
+  };
+
+  // Execute TMDB Identity Resolution
+  const executeResolveTmdb = async (dryRun: boolean) => {
+    if (!selectedMovieId) return;
+    setIsExecutingAction(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/review-queue/movies/${selectedMovieId}/resolve-tmdb`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || 'Failed to resolve TMDB identity.');
+      }
+      setActionSuccess(data.result?.message || 'TMDB resolution completed.');
+      await openDetailModal(selectedMovieId);
+      loadQueue();
+      loadStats();
+    } catch (err: any) {
+      setActionError(err.message || 'TMDB resolution failed.');
     } finally {
       setIsExecutingAction(false);
     }
@@ -270,6 +303,68 @@ export function ReviewQueueView() {
         </div>
       )}
 
+      {/* Recovery Pipeline Statistics */}
+      {stats?.recoveryBreakdown && (
+        <div className="p-4 rounded-2xl glass-card border border-slate-800 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <Compass className="w-4 h-4 text-amber-400" /> Deterministic Recovery Classification (756 Records)
+            </span>
+            <span className="text-[10px] text-slate-500">Mutually Exclusive 6-Cohort Partition</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
+            <button
+              onClick={() => { setRecoveryClass(recoveryClass === 'READY_FOR_APPROVAL' ? '' : 'READY_FOR_APPROVAL'); setPage(1); }}
+              className={`p-2.5 rounded-xl border text-left transition ${recoveryClass === 'READY_FOR_APPROVAL' ? 'bg-emerald-950/80 border-emerald-500' : 'bg-slate-900/60 border-slate-800 hover:border-emerald-700/60'}`}
+            >
+              <div className="text-[10px] text-slate-400">Ready for Approval</div>
+              <div className="text-lg font-bold text-emerald-400">{stats.recoveryBreakdown.READY_FOR_APPROVAL}</div>
+              <div className="text-[9px] text-emerald-500/80">100% clues ready</div>
+            </button>
+            <button
+              onClick={() => { setRecoveryClass(recoveryClass === 'TMDB_ENRICHMENT_CANDIDATE' ? '' : 'TMDB_ENRICHMENT_CANDIDATE'); setPage(1); }}
+              className={`p-2.5 rounded-xl border text-left transition ${recoveryClass === 'TMDB_ENRICHMENT_CANDIDATE' ? 'bg-blue-950/80 border-blue-500' : 'bg-slate-900/60 border-slate-800 hover:border-blue-700/60'}`}
+            >
+              <div className="text-[10px] text-slate-400">TMDB Enrichment</div>
+              <div className="text-lg font-bold text-blue-400">{stats.recoveryBreakdown.TMDB_ENRICHMENT_CANDIDATE}</div>
+              <div className="text-[9px] text-blue-500/80">Has TMDB ID</div>
+            </button>
+            <button
+              onClick={() => { setRecoveryClass(recoveryClass === 'TMDB_IDENTITY_RECOVERY_CANDIDATE' ? '' : 'TMDB_IDENTITY_RECOVERY_CANDIDATE'); setPage(1); }}
+              className={`p-2.5 rounded-xl border text-left transition ${recoveryClass === 'TMDB_IDENTITY_RECOVERY_CANDIDATE' ? 'bg-indigo-950/80 border-indigo-500' : 'bg-slate-900/60 border-slate-800 hover:border-indigo-700/60'}`}
+            >
+              <div className="text-[10px] text-slate-400">TMDB Identity Recovery</div>
+              <div className="text-lg font-bold text-indigo-400">{stats.recoveryBreakdown.TMDB_IDENTITY_RECOVERY_CANDIDATE}</div>
+              <div className="text-[9px] text-indigo-500/80">Search candidate</div>
+            </button>
+            <button
+              onClick={() => { setRecoveryClass(recoveryClass === 'DUPLICATE_REVIEW_REQUIRED' ? '' : 'DUPLICATE_REVIEW_REQUIRED'); setPage(1); }}
+              className={`p-2.5 rounded-xl border text-left transition ${recoveryClass === 'DUPLICATE_REVIEW_REQUIRED' ? 'bg-amber-950/80 border-amber-500' : 'bg-slate-900/60 border-slate-800 hover:border-amber-700/60'}`}
+            >
+              <div className="text-[10px] text-slate-400">Duplicate Review</div>
+              <div className="text-lg font-bold text-amber-400">{stats.recoveryBreakdown.DUPLICATE_REVIEW_REQUIRED}</div>
+              <div className="text-[9px] text-amber-500/80">Title/year collision</div>
+            </button>
+            <button
+              onClick={() => { setRecoveryClass(recoveryClass === 'ARTIFACT_REJECTION_CANDIDATE' ? '' : 'ARTIFACT_REJECTION_CANDIDATE'); setPage(1); }}
+              className={`p-2.5 rounded-xl border text-left transition ${recoveryClass === 'ARTIFACT_REJECTION_CANDIDATE' ? 'bg-rose-950/80 border-rose-500' : 'bg-slate-900/60 border-slate-800 hover:border-rose-700/60'}`}
+            >
+              <div className="text-[10px] text-slate-400">Artifact Rejection</div>
+              <div className="text-lg font-bold text-rose-400">{stats.recoveryBreakdown.ARTIFACT_REJECTION_CANDIDATE}</div>
+              <div className="text-[9px] text-rose-500/80">Scraper malformed</div>
+            </button>
+            <button
+              onClick={() => { setRecoveryClass(recoveryClass === 'MANUAL_REVIEW_REQUIRED' ? '' : 'MANUAL_REVIEW_REQUIRED'); setPage(1); }}
+              className={`p-2.5 rounded-xl border text-left transition ${recoveryClass === 'MANUAL_REVIEW_REQUIRED' ? 'bg-slate-800 border-slate-400' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
+            >
+              <div className="text-[10px] text-slate-400">Manual Review</div>
+              <div className="text-lg font-bold text-slate-300">{stats.recoveryBreakdown.MANUAL_REVIEW_REQUIRED}</div>
+              <div className="text-[9px] text-slate-500">Unconventional</div>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 2. Filter & Search Bar */}
       <div className="p-4 rounded-2xl glass-card border border-slate-800 space-y-4">
         <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-3">
@@ -291,7 +386,20 @@ export function ReviewQueueView() {
           </button>
         </form>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 border-t border-slate-800/80">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 pt-2 border-t border-slate-800/80">
+          <select
+            value={recoveryClass}
+            onChange={(e) => { setRecoveryClass(e.target.value); setPage(1); }}
+            className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300"
+          >
+            <option value="">All Recovery Classes</option>
+            <option value="READY_FOR_APPROVAL">Ready for Approval</option>
+            <option value="TMDB_ENRICHMENT_CANDIDATE">TMDB Enrichment</option>
+            <option value="TMDB_IDENTITY_RECOVERY_CANDIDATE">TMDB Identity Recovery</option>
+            <option value="DUPLICATE_REVIEW_REQUIRED">Duplicate Review</option>
+            <option value="ARTIFACT_REJECTION_CANDIDATE">Artifact Rejection</option>
+            <option value="MANUAL_REVIEW_REQUIRED">Manual Review</option>
+          </select>
           <select
             value={language}
             onChange={(e) => { setLanguage(e.target.value); setPage(1); }}
@@ -403,6 +511,23 @@ export function ReviewQueueView() {
                     {item.tmdbId && (
                       <span className="text-[10px] px-2 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-800/50">
                         TMDB: {item.tmdbId}
+                      </span>
+                    )}
+                    {item.primaryRecoveryClass && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-semibold border ${
+                        item.primaryRecoveryClass === 'READY_FOR_APPROVAL'
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                          : item.primaryRecoveryClass === 'TMDB_ENRICHMENT_CANDIDATE'
+                          ? 'bg-blue-950/80 text-blue-300 border-blue-700/60'
+                          : item.primaryRecoveryClass === 'TMDB_IDENTITY_RECOVERY_CANDIDATE'
+                          ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60'
+                          : item.primaryRecoveryClass === 'DUPLICATE_REVIEW_REQUIRED'
+                          ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                          : item.primaryRecoveryClass === 'ARTIFACT_REJECTION_CANDIDATE'
+                          ? 'bg-rose-950/80 text-rose-300 border-rose-700/60'
+                          : 'bg-slate-800 text-slate-300 border-slate-700'
+                      }`}>
+                        {item.primaryRecoveryClass.replace(/_/g, ' ')}
                       </span>
                     )}
                   </div>
@@ -524,6 +649,71 @@ export function ReviewQueueView() {
                     <p className="text-[11px] text-amber-200/80">
                       Referenced by {detailData.targetReferences.dailyPuzzles} Daily Puzzle(s), {detailData.targetReferences.challenges} Challenge(s), and {detailData.targetReferences.games} Active Game(s). Rejection or destructive duplicate removal is blocked.
                     </p>
+                  </div>
+                )}
+
+                {/* Recovery Pipeline Diagnostic Banner */}
+                {detailData.primaryRecoveryClass && (
+                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Compass className="w-4 h-4 text-amber-400" />
+                        <span className="font-bold text-slate-200">Recovery Classification:</span>
+                        <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-800 text-amber-300 border border-slate-700">
+                          {detailData.primaryRecoveryClass.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      {detailData.secondaryIssues && detailData.secondaryIssues.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+                          <span>Issues:</span>
+                          {detailData.secondaryIssues.map((s, idx) => (
+                            <span key={idx} className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                              {s.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Contextual Quick Actions */}
+                    <div className="flex items-center gap-2">
+                      {detailData.primaryRecoveryClass === 'TMDB_IDENTITY_RECOVERY_CANDIDATE' && (
+                        <>
+                          <button
+                            disabled={isExecutingAction}
+                            onClick={() => executeResolveTmdb(true)}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/60 font-semibold text-xs transition"
+                          >
+                            Dry-Run Resolver
+                          </button>
+                          <button
+                            disabled={isExecutingAction}
+                            onClick={() => executeResolveTmdb(false)}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition"
+                          >
+                            Resolve TMDB ID
+                          </button>
+                        </>
+                      )}
+                      {detailData.primaryRecoveryClass === 'ARTIFACT_REJECTION_CANDIDATE' && (
+                        <button
+                          disabled={isExecutingAction}
+                          onClick={() => executeAction('REJECT', 'Malformed scraper artifact candidate rejection')}
+                          className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition"
+                        >
+                          Reject Malformed Artifact
+                        </button>
+                      )}
+                      {detailData.primaryRecoveryClass === 'READY_FOR_APPROVAL' && (
+                        <button
+                          disabled={isExecutingAction}
+                          onClick={() => executeAction('APPROVE')}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition"
+                        >
+                          Approve Target Candidate
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
