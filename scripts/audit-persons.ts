@@ -20,6 +20,13 @@ async function main() {
   console.log('------------------------------------------------------------');
   console.log(`Lead Cast Persons:               ${stats.leadCastCount} (With Image: ${stats.leadCastWithImage})`);
   console.log(`Directors:                       ${stats.directorsCount} (With Image: ${stats.directorsWithImage})`);
+  console.log(`Supporting Cast (CastTile):      ${stats.supportingCastCount} (With Image: ${stats.supportingCastWithImage})`);
+  console.log('------------------------------------------------------------');
+  console.log('PLAYER-VISIBLE PERSONS (Lead Cast, Director, Supporting Cast)');
+  console.log('------------------------------------------------------------');
+  console.log(`Player-Visible Total:            ${stats.playerVisibleTotal}`);
+  console.log(`Verified Images:                 ${stats.playerVisibleWithImage} (${((stats.playerVisibleWithImage / stats.playerVisibleTotal) * 100).toFixed(1)}%)`);
+  console.log(`Missing Images (Manual Review):  ${stats.playerVisibleWithoutImage}`);
   console.log(`Enrichment Candidates (tmdbId+): ${stats.enrichmentCandidates}`);
   console.log('============================================================\n');
 }

@@ -48,9 +48,12 @@ async function main() {
     const moviesSummary = p.movies
       .map((m) => `${m.movie.primaryTitle} (${m.movie.releaseYear}) [${m.roleType}]`)
       .join(', ');
+    const isDirector = p.movies.some((m) => m.roleType === 'DIRECTOR');
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(`"${p.canonicalName}" ${isDirector ? 'director' : 'actor'} Indian cinema`)}`;
     console.log(
       `- ${p.canonicalName} (TMDB ID: ${p.tmdbId ?? 'NONE'}) -> Movies: ${moviesSummary || 'None'}`
     );
+    console.log(`  Search URL: ${searchUrl}`);
   }
   console.log('============================================================\n');
 }

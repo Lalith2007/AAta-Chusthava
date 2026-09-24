@@ -2,6 +2,8 @@ import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter, TmdbMovieDetails } from '@/infrastructure/external-sources/tmdb-adapter';
 import { resolvePosterUrl } from '@/lib/poster-utils';
 import { recordPosterProvenance } from '@/lib/poster-provenance';
+import { posterDiscoveryProvider } from './poster-discovery-provider';
+import { mediaIdentityValidator } from './media-identity-validator';
 
 export type PosterFailureCategory =
   | 'CONFIG_MISSING'
@@ -96,10 +98,16 @@ export function classifyPosterError(error: unknown): {
 export interface PosterEnrichmentOptions {
   dryRun?: boolean;
   limit?: number;
+  skip?: number;
   movieId?: string;
   concurrency?: number;
   maxRetries?: number;
   retryDelayMs?: number;
+  source?: 'tmdb' | 'google' | 'all';
+  targetOnly?: boolean;
+  nonTargetOnly?: boolean;
+  missingOnly?: boolean;
+  manualOnly?: boolean;
   onProgress?: (progress: {
     processed: number;
     total: number;
@@ -115,10 +123,11 @@ export interface PosterEnrichmentResult {
   tmdbId: number;
   title: string;
   releaseYear: number;
-  status: 'ENRICHED' | 'ALREADY_HAD_POSTER' | 'NO_POSTER_AVAILABLE' | 'FAILED' | 'SKIPPED';
+  status: 'ENRICHED' | 'ALREADY_HAD_POSTER' | 'NO_POSTER_AVAILABLE' | 'FAILED' | 'SKIPPED' | 'MANUAL_REVIEW_REQUIRED';
   previousPosterAsset: string | null;
   newPosterAsset: string | null;
   rawPosterPath?: string | null;
+  source?: string;
   failureCategory?: PosterFailureCategory;
   safeErrorReason?: string;
   error?: string;
@@ -131,6 +140,7 @@ export interface PosterEnrichmentSummaryReport {
   alreadyHadPoster: number;
   successfullyEnriched: number;
   noPosterAvailable: number;
+  manualReviewRequired: number;
   lookupFailures: number;
   configMissingFailures: number;
   authFailures: number;
@@ -197,7 +207,7 @@ export class PosterEnrichmentService {
    */
   async enrichMoviePoster(
     movieId: string,
-    options: { dryRun?: boolean; maxRetries?: number } = {}
+    options: { dryRun?: boolean; maxRetries?: number; source?: 'tmdb' | 'google' | 'all' } = {}
   ): Promise<PosterEnrichmentResult> {
     const movie = await prisma.movie.findUnique({
       where: { id: movieId },
@@ -205,6 +215,7 @@ export class PosterEnrichmentService {
         id: true,
         tmdbId: true,
         primaryTitle: true,
+        originalTitle: true,
         releaseYear: true,
         posterAsset: true,
         lifecycleStatus: true,
@@ -230,93 +241,106 @@ export class PosterEnrichmentService {
       };
     }
 
-    if (!movie.tmdbId) {
-      return {
-        movieId: movie.id,
-        tmdbId: 0,
-        title: movie.primaryTitle,
-        releaseYear: movie.releaseYear,
-        status: 'SKIPPED',
-        previousPosterAsset: null,
-        newPosterAsset: null,
-        error: 'Movie has no TMDB ID',
-      };
-    }
+    const sourceMode = options.source || 'all';
 
-    try {
-      const details = await this.fetchTmdbDetailsWithRetry(
-        movie.tmdbId,
-        options.maxRetries ?? this.defaultMaxRetries
-      );
+    // 1. If movie has tmdbId and source is 'tmdb' or 'all', use TMDB direct lookup
+    if (movie.tmdbId && sourceMode !== 'google') {
+      try {
+        const details = await this.fetchTmdbDetailsWithRetry(
+          movie.tmdbId,
+          options.maxRetries ?? this.defaultMaxRetries
+        );
 
-      const rawPosterPath = details.poster_path?.trim() || null;
-      const normalizedUrl = resolvePosterUrl(rawPosterPath);
+        const rawPosterPath = details.poster_path?.trim() || null;
+        const normalizedUrl = resolvePosterUrl(rawPosterPath);
 
-      if (rawPosterPath && normalizedUrl) {
-        if (!options.dryRun) {
-          // 1. Safe update: ONLY update posterAsset on Movie
-          await prisma.movie.update({
-            where: { id: movie.id },
-            data: {
-              posterAsset: normalizedUrl,
+        if (rawPosterPath && normalizedUrl) {
+          // Strictly score candidate to guard against collisions (e.g. Kalki vs Dune)
+          const validation = mediaIdentityValidator.scorePosterCandidate(
+            {
+              title: movie.primaryTitle,
+              releaseYear: movie.releaseYear,
+              tmdbId: movie.tmdbId,
+              originalTitle: movie.originalTitle,
             },
-          });
+            {
+              imageUrl: normalizedUrl,
+              source: 'TMDB',
+              candidateTitle: details.title || movie.primaryTitle,
+              candidateYear: details.release_date
+                ? parseInt(details.release_date.split('-')[0], 10)
+                : movie.releaseYear,
+              tmdbId: details.id,
+              sourceDomain: 'themoviedb.org',
+            }
+          );
 
-          await recordPosterProvenance(movie.id, previousPosterAsset, normalizedUrl, {
-            source: 'TMDB_ID_EXACT',
-            verificationMethod: 'AUTOMATED_EXACT_MATCH',
-            verifiedAt: new Date().toISOString(),
-          });
+          if (validation.isAcceptableForAutoEnrich) {
+            if (!options.dryRun) {
+              await prisma.movie.update({
+                where: { id: movie.id },
+                data: { posterAsset: normalizedUrl },
+              });
 
-          // 2. Preserve Provenance: Upsert RawSourceRecord
-          const existingRaw = await prisma.rawSourceRecord.findUnique({
-            where: {
-              source_sourceRecordId: {
-                source: 'TMDB',
-                sourceRecordId: String(movie.tmdbId),
-              },
-            },
-          });
+              await recordPosterProvenance(movie.id, previousPosterAsset, normalizedUrl, {
+                source: 'TMDB_ID_EXACT',
+                verificationMethod: 'AUTOMATED_EXACT_MATCH',
+                verifiedAt: new Date().toISOString(),
+                notes: `Score: ${validation.score}`,
+              });
 
-          if (existingRaw) {
-            const currentPayload = (existingRaw.payload as Record<string, unknown>) || {};
-            await prisma.rawSourceRecord.update({
-              where: { id: existingRaw.id },
-              data: {
-                payload: {
-                  ...currentPayload,
-                  details,
-                  posterEnrichedAt: new Date().toISOString(),
-                } as any,
-                fetchedAt: new Date(),
-              },
-            });
-          } else {
-            await prisma.rawSourceRecord.create({
-              data: {
-                source: 'TMDB',
-                sourceRecordId: String(movie.tmdbId),
-                payload: {
-                  details,
-                  posterEnrichedAt: new Date().toISOString(),
-                } as any,
-                fetchedAt: new Date(),
-              },
-            });
+              // Preserve Provenance: Upsert RawSourceRecord
+              const existingRaw = await prisma.rawSourceRecord.findUnique({
+                where: {
+                  source_sourceRecordId: {
+                    source: 'TMDB',
+                    sourceRecordId: String(movie.tmdbId),
+                  },
+                },
+              });
+
+              if (existingRaw) {
+                const currentPayload = (existingRaw.payload as Record<string, unknown>) || {};
+                await prisma.rawSourceRecord.update({
+                  where: { id: existingRaw.id },
+                  data: {
+                    payload: {
+                      ...currentPayload,
+                      details,
+                      posterEnrichedAt: new Date().toISOString(),
+                    } as any,
+                    fetchedAt: new Date(),
+                  },
+                });
+              } else {
+                await prisma.rawSourceRecord.create({
+                  data: {
+                    source: 'TMDB',
+                    sourceRecordId: String(movie.tmdbId),
+                    payload: {
+                      details,
+                      posterEnrichedAt: new Date().toISOString(),
+                    } as any,
+                    fetchedAt: new Date(),
+                  },
+                });
+              }
+            }
+
+            return {
+              movieId: movie.id,
+              tmdbId: movie.tmdbId,
+              title: movie.primaryTitle,
+              releaseYear: movie.releaseYear,
+              status: 'ENRICHED',
+              previousPosterAsset,
+              newPosterAsset: normalizedUrl,
+              rawPosterPath,
+              source: 'TMDB_ID_EXACT',
+            };
           }
         }
 
-        return {
-          movieId: movie.id,
-          tmdbId: movie.tmdbId,
-          title: movie.primaryTitle,
-          releaseYear: movie.releaseYear,
-          status: 'ENRICHED',
-          previousPosterAsset,
-          newPosterAsset: normalizedUrl,
-          rawPosterPath,
-        };
-      } else {
         return {
           movieId: movie.id,
           tmdbId: movie.tmdbId,
@@ -327,22 +351,103 @@ export class PosterEnrichmentService {
           newPosterAsset: null,
           rawPosterPath,
         };
+      } catch (err: unknown) {
+        const { category, safeReason } = classifyPosterError(err);
+        return {
+          movieId: movie.id,
+          tmdbId: movie.tmdbId,
+          title: movie.primaryTitle,
+          releaseYear: movie.releaseYear,
+          status: 'FAILED',
+          previousPosterAsset,
+          newPosterAsset: null,
+          failureCategory: category,
+          safeErrorReason: safeReason,
+          error: safeReason,
+        };
       }
-    } catch (err: unknown) {
-      const { category, safeReason } = classifyPosterError(err);
-      return {
-        movieId: movie.id,
-        tmdbId: movie.tmdbId,
-        title: movie.primaryTitle,
-        releaseYear: movie.releaseYear,
-        status: 'FAILED',
-        previousPosterAsset,
-        newPosterAsset: null,
-        failureCategory: category,
-        safeErrorReason: safeReason,
-        error: safeReason,
-      };
     }
+
+    // 2. TMDB Title+Year search & Multi-source discovery provider fallback
+    if (sourceMode === 'all' || sourceMode === 'tmdb' || sourceMode === 'google') {
+      try {
+        const discovery = await posterDiscoveryProvider.discoverPoster({
+          id: movie.id,
+          title: movie.primaryTitle,
+          releaseYear: movie.releaseYear,
+          tmdbId: movie.tmdbId,
+          originalTitle: movie.originalTitle,
+        });
+
+        if (discovery.status === 'VERIFIED' && discovery.posterUrl) {
+          if (!options.dryRun) {
+            const updateData: any = { posterAsset: discovery.posterUrl };
+            if (!movie.tmdbId && discovery.candidate?.tmdbId) {
+              try {
+                const existing = await prisma.movie.findUnique({
+                  where: { tmdbId: discovery.candidate.tmdbId },
+                  select: { id: true },
+                });
+                if (!existing) {
+                  updateData.tmdbId = discovery.candidate.tmdbId;
+                }
+              } catch {
+                // Ignore unique check error
+              }
+            }
+
+            await prisma.movie.update({
+              where: { id: movie.id },
+              data: updateData,
+            });
+
+            await recordPosterProvenance(movie.id, previousPosterAsset, discovery.posterUrl, {
+              source: discovery.source as any,
+              verificationMethod: 'DISCOVERY_PROVIDER_MATCH',
+              verifiedAt: new Date().toISOString(),
+              notes: discovery.notes,
+            });
+          }
+
+          return {
+            movieId: movie.id,
+            tmdbId: movie.tmdbId ?? 0,
+            title: movie.primaryTitle,
+            releaseYear: movie.releaseYear,
+            status: 'ENRICHED',
+            previousPosterAsset,
+            newPosterAsset: discovery.posterUrl,
+            source: discovery.source,
+          };
+        }
+
+        if (discovery.status === 'MANUAL_REVIEW_REQUIRED') {
+          return {
+            movieId: movie.id,
+            tmdbId: movie.tmdbId ?? 0,
+            title: movie.primaryTitle,
+            releaseYear: movie.releaseYear,
+            status: 'MANUAL_REVIEW_REQUIRED',
+            previousPosterAsset,
+            newPosterAsset: null,
+            error: discovery.notes || 'Routed to manual review queue',
+          };
+        }
+      } catch (err: any) {
+        // Discovery error
+      }
+    }
+
+    return {
+      movieId: movie.id,
+      tmdbId: movie.tmdbId ?? 0,
+      title: movie.primaryTitle,
+      releaseYear: movie.releaseYear,
+      status: 'NO_POSTER_AVAILABLE',
+      previousPosterAsset,
+      newPosterAsset: null,
+      error: 'No verified poster found across available sources',
+    };
   }
 
   /**
@@ -357,7 +462,6 @@ export class PosterEnrichmentService {
 
     const candidateWhere: any = {
       lifecycleStatus: 'ACTIVE',
-      tmdbId: { not: null },
       OR: [
         { posterAsset: null },
         { posterAsset: '' },
@@ -366,12 +470,19 @@ export class PosterEnrichmentService {
       ],
     };
 
+    if (options.targetOnly) {
+      candidateWhere.eligibility = { playableAsTarget: true };
+    } else if (options.nonTargetOnly) {
+      candidateWhere.eligibility = { playableAsTarget: false };
+    }
+
     if (options.movieId) {
       candidateWhere.id = options.movieId;
     }
 
     const candidates = await prisma.movie.findMany({
       where: candidateWhere,
+      skip: options.skip,
       take: options.limit,
       orderBy: [{ releaseYear: 'desc' }, { primaryTitle: 'asc' }],
       select: { id: true, primaryTitle: true, releaseYear: true, tmdbId: true },
@@ -384,6 +495,7 @@ export class PosterEnrichmentService {
     let processed = 0;
     let successfullyEnriched = 0;
     let noPosterAvailable = 0;
+    let manualReviewRequired = 0;
     let lookupFailures = 0;
     let configMissingFailures = 0;
     let authFailures = 0;
@@ -402,11 +514,13 @@ export class PosterEnrichmentService {
           const res = await this.enrichMoviePoster(cand.id, {
             dryRun: options.dryRun,
             maxRetries: options.maxRetries,
+            source: options.source,
           });
 
           processed++;
           if (res.status === 'ENRICHED') successfullyEnriched++;
           else if (res.status === 'NO_POSTER_AVAILABLE') noPosterAvailable++;
+          else if (res.status === 'MANUAL_REVIEW_REQUIRED') manualReviewRequired++;
           else if (res.status === 'ALREADY_HAD_POSTER') alreadyHadPoster++;
           else if (res.status === 'FAILED') {
             lookupFailures++;
@@ -450,6 +564,7 @@ export class PosterEnrichmentService {
       alreadyHadPoster,
       successfullyEnriched,
       noPosterAvailable,
+      manualReviewRequired,
       lookupFailures,
       configMissingFailures,
       authFailures,

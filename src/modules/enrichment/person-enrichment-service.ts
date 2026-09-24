@@ -1,13 +1,17 @@
 import { prisma } from '@/infrastructure/db/client';
 import { tmdbAdapter } from '@/infrastructure/external-sources/tmdb-adapter';
 import { resolvePosterUrl } from '@/lib/poster-utils';
+import { mediaIdentityValidator } from './media-identity-validator';
 
 export interface PersonEnrichmentOptions {
   dryRun?: boolean;
   limit?: number;
+  skip?: number;
   personId?: string;
   targetOnly?: boolean;
+  roles?: ('DIRECTOR' | 'LEAD' | 'SUPPORTING')[];
   concurrency?: number;
+  recoverIdentity?: boolean;
   onProgress?: (progress: {
     processed: number;
     total: number;
@@ -45,6 +49,10 @@ export interface PersonAuditStats {
   totalPersons: number;
   personsInActiveMovies: number;
   personsInTargetPlayable: number;
+  playerVisibleTotal: number;
+  playerVisibleWithImage: number;
+  playerVisibleWithoutImage: number;
+  playerVisibleManualReview: number;
   withImage: number;
   withoutImage: number;
   withTmdbId: number;
@@ -53,6 +61,8 @@ export interface PersonAuditStats {
   leadCastWithImage: number;
   directorsCount: number;
   directorsWithImage: number;
+  supportingCastCount: number;
+  supportingCastWithImage: number;
   enrichmentCandidates: number;
 }
 
@@ -60,11 +70,11 @@ export class PersonEnrichmentService {
   private defaultConcurrency = 5;
 
   /**
-   * Enriches a single person's profile image safely and idempotently
+   * Enriches a single person's profile image safely and idempotently with identity recovery
    */
   async enrichPersonImage(
     personId: string,
-    options: { dryRun?: boolean } = {}
+    options: { dryRun?: boolean; recoverIdentity?: boolean } = {}
   ): Promise<PersonEnrichmentResult> {
     const person = await prisma.person.findUnique({
       where: { id: personId },
@@ -94,7 +104,8 @@ export class PersonEnrichmentService {
       };
     }
 
-    if (!person.tmdbId) {
+    // 1. If person has no TMDB ID and identity recovery is not enabled, return SKIPPED
+    if (!person.tmdbId && !options.recoverIdentity) {
       return {
         personId: person.id,
         tmdbId: 0,
@@ -106,54 +117,226 @@ export class PersonEnrichmentService {
       };
     }
 
-    try {
-      const details = tmdbAdapter.getPersonDetails
-        ? await tmdbAdapter.getPersonDetails(person.tmdbId)
-        : null;
+    let directProfileChecked = false;
 
-      const rawProfilePath = details?.profile_path?.trim() || null;
-      const normalizedUrl = resolvePosterUrl(rawProfilePath, 'w185');
+    // 2. Direct TMDB ID lookup if present
+    if (person.tmdbId) {
+      try {
+        const details = tmdbAdapter.getPersonDetails
+          ? await tmdbAdapter.getPersonDetails(person.tmdbId)
+          : null;
 
-      if (rawProfilePath && normalizedUrl) {
-        if (!options.dryRun) {
-          await prisma.person.update({
-            where: { id: person.id },
-            data: { image: normalizedUrl },
+        if (details) {
+          directProfileChecked = true;
+          const rawProfilePath = details.profile_path?.trim() || null;
+          const normalizedUrl = resolvePosterUrl(rawProfilePath, 'w185');
+          const urlCheck = mediaIdentityValidator.validateImageUrl(normalizedUrl);
+
+          if (rawProfilePath && normalizedUrl && urlCheck.isValid) {
+            if (!options.dryRun) {
+              await prisma.person.update({
+                where: { id: person.id },
+                data: { image: normalizedUrl },
+              });
+            }
+
+            return {
+              personId: person.id,
+              tmdbId: person.tmdbId,
+              name: person.canonicalName,
+              status: 'ENRICHED',
+              previousImage,
+              newImage: normalizedUrl,
+              rawProfilePath,
+            };
+          } else {
+            return {
+              personId: person.id,
+              tmdbId: person.tmdbId,
+              name: person.canonicalName,
+              status: 'NO_IMAGE_AVAILABLE',
+              previousImage,
+              newImage: null,
+              rawProfilePath,
+              error: urlCheck.reason || 'No profile image available on TMDB',
+            };
+          }
+        }
+      } catch {
+        // Fall through to identity recovery if allowed
+      }
+    }
+
+    // 3. Identity Recovery via TMDB search if person has no TMDB ID or lookup was unresolvable
+    if (!directProfileChecked && options.recoverIdentity) {
+      try {
+        const personData = await prisma.person.findUnique({
+          where: { id: personId },
+          select: {
+            movies: {
+              select: {
+                roleType: true,
+                movie: {
+                  select: {
+                    primaryTitle: true,
+                    releaseYear: true,
+                    originalTitle: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        const knownMovies = (personData?.movies || []).map((m) => ({
+          title: m.movie.primaryTitle,
+          year: m.movie.releaseYear,
+          originalTitle: m.movie.originalTitle,
+          roleType: m.roleType,
+        }));
+
+        const searchRes = await tmdbAdapter.searchPerson(person.canonicalName);
+        const candidates = searchRes?.results || [];
+
+        let matchedCandidate: any = null;
+        let matchCount = 0;
+
+        for (const cand of candidates) {
+          const candNameMatch = cand.name.toLowerCase().trim() === person.canonicalName.toLowerCase().trim();
+          const candContext = [
+            cand.name,
+            cand.known_for_department,
+            ...(cand.known_for || []).map((k: any) => `${k.title || k.name || ''} ${k.original_title || ''}`),
+          ]
+            .join(' ')
+            .toLowerCase();
+
+          let hasFilmOverlap = knownMovies.some((km) => {
+            const t = km.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const ot = (km.originalTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const candNorm = candContext.replace(/[^a-z0-9]/g, '');
+            return (t.length > 3 && candNorm.includes(t)) || (ot.length > 3 && candNorm.includes(ot));
           });
+
+          // Deep filmography check if candNameMatch and known_for didn't have overlap
+          if (!hasFilmOverlap && candNameMatch && tmdbAdapter.getPersonMovieCredits) {
+            try {
+              const credits = await tmdbAdapter.getPersonMovieCredits(cand.id);
+              const allCreditTitles = [
+                ...(credits.cast || []).map((c: any) => `${c.title || ''} ${c.original_title || ''}`),
+                ...(credits.crew || []).map((c: any) => `${c.title || ''} ${c.original_title || ''}`),
+              ]
+                .join(' ')
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, '');
+
+              hasFilmOverlap = knownMovies.some((km) => {
+                const t = km.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const ot = (km.originalTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                return (t.length > 3 && allCreditTitles.includes(t)) || (ot.length > 3 && allCreditTitles.includes(ot));
+              });
+            } catch {
+              // Ignore credit lookup failure
+            }
+          }
+
+          const isSoloExact =
+            candidates.length === 1 && candNameMatch;
+
+          if (hasFilmOverlap || isSoloExact) {
+            matchedCandidate = cand;
+            matchCount++;
+          }
         }
 
+        // Anti-collision guard: reject ambiguous multiple matches
+        if (matchCount === 1 && matchedCandidate) {
+          const rawProfilePath = matchedCandidate.profile_path?.trim() || null;
+          const normalizedUrl = resolvePosterUrl(rawProfilePath, 'w185');
+          const urlCheck = mediaIdentityValidator.validateImageUrl(normalizedUrl);
+
+          if (!options.dryRun) {
+            // Check if another person record holds this tmdbId to avoid Prisma unique conflict
+            const collision = await prisma.person.findUnique({
+              where: { tmdbId: matchedCandidate.id },
+              select: { id: true },
+            });
+
+            const updateData: any = {};
+            if (!collision || collision.id === person.id) {
+              updateData.tmdbId = matchedCandidate.id;
+            }
+            if (rawProfilePath && normalizedUrl && urlCheck.isValid) {
+              updateData.image = normalizedUrl;
+            }
+
+            if (Object.keys(updateData).length > 0) {
+              try {
+                await prisma.person.update({
+                  where: { id: person.id },
+                  data: updateData,
+                });
+              } catch {
+                if (updateData.image) {
+                  try {
+                    await prisma.person.update({
+                      where: { id: person.id },
+                      data: { image: updateData.image },
+                    });
+                  } catch {
+                    // Ignore secondary update error
+                  }
+                }
+              }
+            }
+          }
+
+          if (rawProfilePath && normalizedUrl && urlCheck.isValid) {
+            return {
+              personId: person.id,
+              tmdbId: matchedCandidate.id,
+              name: person.canonicalName,
+              status: 'ENRICHED',
+              previousImage,
+              newImage: normalizedUrl,
+              rawProfilePath,
+            };
+          } else {
+            return {
+              personId: person.id,
+              tmdbId: matchedCandidate.id,
+              name: person.canonicalName,
+              status: 'NO_IMAGE_AVAILABLE',
+              previousImage,
+              newImage: null,
+              rawProfilePath,
+              error: 'Identity recovered but TMDB profile has no image',
+            };
+          }
+        }
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err || 'Unknown error');
         return {
           personId: person.id,
-          tmdbId: person.tmdbId,
+          tmdbId: person.tmdbId ?? 0,
           name: person.canonicalName,
-          status: 'ENRICHED',
-          previousImage,
-          newImage: normalizedUrl,
-          rawProfilePath,
-        };
-      } else {
-        return {
-          personId: person.id,
-          tmdbId: person.tmdbId,
-          name: person.canonicalName,
-          status: 'NO_IMAGE_AVAILABLE',
+          status: 'FAILED',
           previousImage,
           newImage: null,
-          rawProfilePath,
+          error: errMsg.slice(0, 100),
         };
       }
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err || 'Unknown error');
-      return {
-        personId: person.id,
-        tmdbId: person.tmdbId,
-        name: person.canonicalName,
-        status: 'FAILED',
-        previousImage,
-        newImage: null,
-        error: errMsg.slice(0, 100),
-      };
     }
+
+    return {
+      personId: person.id,
+      tmdbId: person.tmdbId ?? 0,
+      name: person.canonicalName,
+      status: 'NO_IMAGE_AVAILABLE',
+      previousImage: null,
+      newImage: null,
+      error: 'No verified profile image found on TMDB',
+    };
   }
 
   /**
@@ -165,7 +348,6 @@ export class PersonEnrichmentService {
     const totalPersons = await prisma.person.count();
 
     const candidateWhere: any = {
-      tmdbId: { not: null },
       OR: [
         { image: null },
         { image: '' },
@@ -174,12 +356,29 @@ export class PersonEnrichmentService {
       ],
     };
 
+    if (options.recoverIdentity === false) {
+      candidateWhere.tmdbId = { not: null };
+    }
+
     if (options.personId) {
       candidateWhere.id = options.personId;
     }
 
-    if (options.targetOnly) {
-      // Limit to persons referenced in target-eligible movies
+    if (options.roles && options.roles.length > 0) {
+      candidateWhere.movies = {
+        some: {
+          roleType: { in: options.roles },
+          ...(options.targetOnly
+            ? {
+                movie: {
+                  lifecycleStatus: 'ACTIVE',
+                  eligibility: { playableAsTarget: true },
+                },
+              }
+            : {}),
+        },
+      };
+    } else if (options.targetOnly) {
       candidateWhere.movies = {
         some: {
           movie: {
@@ -192,8 +391,9 @@ export class PersonEnrichmentService {
 
     const candidates = await prisma.person.findMany({
       where: candidateWhere,
+      skip: options.skip,
       take: options.limit,
-      orderBy: { canonicalName: 'asc' },
+      orderBy: [{ tmdbId: 'desc' }, { canonicalName: 'asc' }],
       select: { id: true, canonicalName: true, tmdbId: true },
     });
 
@@ -214,6 +414,7 @@ export class PersonEnrichmentService {
         chunk.map(async (cand) => {
           const res = await this.enrichPersonImage(cand.id, {
             dryRun: options.dryRun,
+            recoverIdentity: options.recoverIdentity,
           });
 
           processed++;
@@ -351,6 +552,70 @@ export class PersonEnrichmentService {
       },
     });
 
+    // Supporting Cast counts (visible in CastTile)
+    const supportingCastCount = await prisma.person.count({
+      where: {
+        movies: {
+          some: {
+            roleType: 'SUPPORTING',
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
+    const supportingCastWithImage = await prisma.person.count({
+      where: {
+        image: { not: null },
+        NOT: [{ image: '' }, { image: 'null' }, { image: 'undefined' }],
+        movies: {
+          some: {
+            roleType: 'SUPPORTING',
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
+    // Player-Visible Person Total (LEAD, DIRECTOR, SUPPORTING in Target-Playable Movies)
+    const playerVisibleTotal = await prisma.person.count({
+      where: {
+        movies: {
+          some: {
+            roleType: { in: ['LEAD', 'DIRECTOR', 'SUPPORTING'] },
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
+    const playerVisibleWithImage = await prisma.person.count({
+      where: {
+        image: { not: null },
+        NOT: [{ image: '' }, { image: 'null' }, { image: 'undefined' }],
+        movies: {
+          some: {
+            roleType: { in: ['LEAD', 'DIRECTOR', 'SUPPORTING'] },
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
+    const playerVisibleWithoutImage = playerVisibleTotal - playerVisibleWithImage;
+
     // Enrichment candidates
     const enrichmentCandidates = await prisma.person.count({
       where: {
@@ -368,6 +633,10 @@ export class PersonEnrichmentService {
       totalPersons,
       personsInActiveMovies,
       personsInTargetPlayable,
+      playerVisibleTotal,
+      playerVisibleWithImage,
+      playerVisibleWithoutImage,
+      playerVisibleManualReview: playerVisibleWithoutImage,
       withImage,
       withoutImage: totalPersons - withImage,
       withTmdbId,
@@ -376,6 +645,8 @@ export class PersonEnrichmentService {
       leadCastWithImage,
       directorsCount,
       directorsWithImage,
+      supportingCastCount,
+      supportingCastWithImage,
       enrichmentCandidates,
     };
   }

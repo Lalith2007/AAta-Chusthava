@@ -7,8 +7,16 @@ async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const targetOnly = args.includes('--target-only');
+  const noRecoverIdentity = args.includes('--no-recover-identity');
+  const recoverIdentity = !noRecoverIdentity;
+  const rolesArg = args.find((a) => a.startsWith('--roles='));
+  const roles = rolesArg
+    ? (rolesArg.split('=')[1].split(',') as ('DIRECTOR' | 'LEAD' | 'SUPPORTING')[])
+    : undefined;
   const limitArg = args.find((a) => a.startsWith('--limit='));
   const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : undefined;
+  const skipArg = args.find((a) => a.startsWith('--skip='));
+  const skip = skipArg ? parseInt(skipArg.split('=')[1], 10) : undefined;
   const concurrencyArg = args.find((a) => a.startsWith('--concurrency='));
   const concurrency = concurrencyArg ? parseInt(concurrencyArg.split('=')[1], 10) : 5;
 
@@ -17,11 +25,14 @@ async function main() {
   console.log('============================================================');
   console.log('AAta CHUSTHAVA — PERSON PROFILE IMAGE ENRICHMENT PIPELINE');
   console.log('============================================================');
-  console.log(`Mode:            ${dryRun ? 'DRY-RUN (No Database Writes)' : 'LIVE EXECUTION'}`);
-  console.log(`Target Only:     ${targetOnly ? 'YES (Target Playable Persons Only)' : 'NO (All Active Persons)'}`);
-  console.log(`Limit:           ${limit ? limit : 'ALL Candidate Persons'}`);
-  console.log(`Concurrency:     ${concurrency}`);
-  console.log(`TMDB Configured: ${isConfigured ? 'YES (Live API Credentials Present)' : 'NO (Mock / Local Fallback)'}`);
+  console.log(`Mode:             ${dryRun ? 'DRY-RUN (No Database Writes)' : 'LIVE EXECUTION'}`);
+  console.log(`Target Only:      ${targetOnly ? 'YES (Target Playable Persons Only)' : 'NO (All Active Persons)'}`);
+  console.log(`Roles:            ${roles ? roles.join(', ') : 'ALL Roles'}`);
+  console.log(`Recover Identity: ${recoverIdentity ? 'YES (Search TMDB by Name + Filmography)' : 'NO (TMDB ID Only)'}`);
+  console.log(`Limit:            ${limit ? limit : 'ALL Candidate Persons'}`);
+  console.log(`Skip:             ${skip ? skip : '0'}`);
+  console.log(`Concurrency:      ${concurrency}`);
+  console.log(`TMDB Configured:  ${isConfigured ? 'YES (Live API Credentials Present)' : 'NO (Mock / Local Fallback)'}`);
   console.log('============================================================\n');
 
   const startTime = Date.now();
@@ -29,7 +40,10 @@ async function main() {
   const report = await personEnrichmentService.enrichAllMissingPersonImages({
     dryRun,
     targetOnly,
+    roles,
+    recoverIdentity,
     limit,
+    skip,
     concurrency,
     onProgress: (p) => {
       if (p.processed % 25 === 0 || p.processed === p.total) {
