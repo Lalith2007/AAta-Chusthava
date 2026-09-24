@@ -6,49 +6,77 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
-    const pageSize = parseInt(searchParams.get('pageSize') || '15', 10);
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '50', 10)));
     const search = searchParams.get('search') || undefined;
-    const targetOnly = searchParams.get('targetOnly') === 'true';
+    const playerVisibleOnly = searchParams.get('playerVisibleOnly') !== 'false';
+    const roleFilter = searchParams.get('role') as 'LEAD' | 'DIRECTOR' | 'SUPPORTING' | undefined;
 
-    const where: any = {
+    const baseWhere: any = {
       OR: [{ image: null }, { image: '' }, { image: 'null' }, { image: 'undefined' }],
     };
 
     if (search) {
-      where.canonicalName = { contains: search, mode: 'insensitive' };
+      baseWhere.canonicalName = { contains: search, mode: 'insensitive' };
     }
 
-    if (targetOnly) {
-      where.movies = {
+    if (playerVisibleOnly) {
+      const allowedRoles = roleFilter ? [roleFilter] : ['LEAD', 'DIRECTOR', 'SUPPORTING'];
+      baseWhere.movies = {
         some: {
+          roleType: { in: allowedRoles },
           movie: {
             lifecycleStatus: 'ACTIVE',
             eligibility: { playableAsTarget: true },
           },
         },
       };
+    } else if (roleFilter) {
+      baseWhere.movies = {
+        some: {
+          roleType: roleFilter,
+          movie: { lifecycleStatus: 'ACTIVE' },
+        },
+      };
     } else {
-      where.movies = {
+      baseWhere.movies = {
         some: {
           movie: { lifecycleStatus: 'ACTIVE' },
         },
       };
     }
 
-    const total = await prisma.person.count({ where });
+    const total = await prisma.person.count({ where: baseWhere });
+    const playerVisibleTotal = await prisma.person.count({
+      where: {
+        OR: [{ image: null }, { image: '' }, { image: 'null' }, { image: 'undefined' }],
+        movies: {
+          some: {
+            roleType: { in: ['LEAD', 'DIRECTOR', 'SUPPORTING'] },
+            movie: {
+              lifecycleStatus: 'ACTIVE',
+              eligibility: { playableAsTarget: true },
+            },
+          },
+        },
+      },
+    });
+
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     const persons = await prisma.person.findMany({
-      where,
+      where: baseWhere,
       skip: (page - 1) * pageSize,
       take: pageSize,
-      orderBy: { canonicalName: 'asc' },
+      orderBy: [{ tmdbId: { sort: 'desc', nulls: 'last' } }, { canonicalName: 'asc' }],
       include: {
         movies: {
-          take: 3,
+          take: 5,
+          where: {
+            movie: { lifecycleStatus: 'ACTIVE' },
+          },
           include: {
             movie: {
-              select: { primaryTitle: true, releaseYear: true },
+              select: { primaryTitle: true, releaseYear: true, eligibility: { select: { playableAsTarget: true } } },
             },
           },
         },
@@ -56,24 +84,45 @@ export async function GET(request: NextRequest) {
     });
 
     const items = persons.map((p) => {
-      const associatedMovies = p.movies.map((m) => `${m.movie.primaryTitle} (${m.movie.releaseYear})`);
-      const googleSearchUrl = mediaIdentityValidator.buildPersonGoogleSearchUrl(p.canonicalName);
+      const targetMovie = p.movies.find((m) => m.movie.eligibility?.playableAsTarget) || p.movies[0];
+      const associatedMovieTitle = targetMovie?.movie.primaryTitle || null;
+      const associatedMovieYear = targetMovie?.movie.releaseYear || null;
+      const primaryRole = targetMovie?.roleType || 'LEAD';
+
+      const associatedMovies = p.movies.map(
+        (m) => `${m.movie.primaryTitle} (${m.movie.releaseYear}) [${m.roleType}]`
+      );
+
+      const googleSearchUrl = mediaIdentityValidator.buildPersonGoogleSearchUrl(p.canonicalName, {
+        associatedMovie: associatedMovieTitle || undefined,
+        movieYear: associatedMovieYear || undefined,
+        role: primaryRole,
+      });
 
       return {
         id: p.id,
         name: p.canonicalName,
+        role: primaryRole,
         tmdbId: p.tmdbId,
         currentImage: p.image,
+        associatedMovieTitle,
+        associatedMovieYear,
         associatedMovies,
         googleSearchUrl,
         candidateSource: p.tmdbId ? 'TMDB_PENDING_REVIEW' : 'GOOGLE_SEARCH_PENDING',
         confidence: p.tmdbId ? 'MEDIUM' : 'LOW',
+        matchEvidence: {
+          nameMatch: 'EXACT',
+          movieCorroboration: associatedMovieTitle ? 'MATCH' : 'UNKNOWN',
+          tmdbIdPresent: Boolean(p.tmdbId),
+        },
       };
     });
 
     return NextResponse.json({
       items,
       total,
+      playerVisibleTotal,
       page,
       pageSize,
       totalPages,

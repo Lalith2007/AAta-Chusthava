@@ -14,6 +14,7 @@ export interface PosterProvenanceData {
     | 'AUTOMATED_EXACT_MATCH'
     | 'DISCOVERY_PROVIDER_MATCH'
     | 'ADMIN_APPROVAL'
+    | 'ADMIN_MANUAL_VERIFIED'
     | 'HISTORICAL_BASELINE';
   verifiedAt: string;
   adminId?: string;
