@@ -8,8 +8,9 @@ export async function GET(request: NextRequest) {
     const pageSize = parseInt(searchParams.get('pageSize') || '20', 10);
     const search = searchParams.get('search') || undefined;
     const targetOnly = searchParams.get('targetOnly') === 'true';
+    const sortBy = (searchParams.get('sortBy') as any) || undefined;
 
-    const data = await posterReviewService.getPosterReviewQueue({ page, pageSize, search, targetOnly });
+    const data = await posterReviewService.getPosterReviewQueue({ page, pageSize, search, targetOnly, sortBy });
     return NextResponse.json(data);
   } catch (err: any) {
     return NextResponse.json(

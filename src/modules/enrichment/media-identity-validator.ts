@@ -100,16 +100,64 @@ export class MediaIdentityValidator {
   /**
    * Generates exact Google search URL for a movie poster
    */
-  buildMovieGoogleSearchUrl(title: string, year: number): string {
-    const query = `"${title}" "${year}" movie poster`;
+  buildMovieGoogleSearchUrl(
+    title: string,
+    year: number,
+    options?: {
+      language?: string;
+      originalTitle?: string | null;
+      director?: string | null;
+      lead?: string | null;
+    }
+  ): string {
+    const parts = [`"${title.trim()}"`, `"${year}"`];
+    if (options?.language) {
+      const lang = options.language.charAt(0).toUpperCase() + options.language.slice(1).toLowerCase();
+      parts.push(lang);
+    }
+    parts.push('movie poster');
+    if (options?.director) {
+      parts.push(`director "${options.director.trim()}"`);
+    } else if (options?.lead) {
+      parts.push(`"${options.lead.trim()}"`);
+    }
+    const query = parts.join(' ');
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   }
 
   /**
    * Generates exact Google search URL for a person profile
    */
-  buildPersonGoogleSearchUrl(name: string, profession = 'actor'): string {
-    const query = `"${name}" ${profession} Indian cinema`;
+  buildPersonGoogleSearchUrl(
+    name: string,
+    options?: {
+      associatedMovie?: string;
+      movieYear?: number;
+      role?: string;
+      profession?: string;
+    } | string
+  ): string {
+    const parts = [`"${name.trim()}"`];
+    if (typeof options === 'string') {
+      parts.push(options, 'Indian cinema');
+    } else if (options) {
+      if (options.associatedMovie) {
+        parts.push(`"${options.associatedMovie.trim()}"`);
+        if (options.movieYear) {
+          parts.push(`"${options.movieYear}"`);
+        }
+      }
+      if (options.role) {
+        const roleWord = options.role === 'DIRECTOR' ? 'director' : 'actor';
+        parts.push(roleWord);
+      } else if (options.profession) {
+        parts.push(options.profession);
+      }
+      parts.push('profile photo');
+    } else {
+      parts.push('actor director profile photo');
+    }
+    const query = parts.join(' ');
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   }
 

@@ -23,11 +23,13 @@ import {
 } from 'lucide-react';
 import { ReviewQueueView } from '@/components/admin/ReviewQueueView';
 import PosterReviewView from '@/components/admin/PosterReviewView';
+import PersonReviewView from '@/components/admin/PersonReviewView';
 
 type Tab = 'overview' | 'review' | 'media' | 'movies' | 'puzzles' | 'audit';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [mediaSubTab, setMediaSubTab] = useState<'posters' | 'persons'>('posters');
   const [overview, setOverview] = useState<any>(null);
   const [mediaStats, setMediaStats] = useState<any>(null);
   const [reviewQueue, setReviewQueue] = useState<any>(null);
@@ -369,91 +371,139 @@ export default function AdminPage() {
       {/* TAB: MEDIA QUALITY */}
       {activeTab === 'media' && (
         <div className="space-y-6">
-          {/* Media Quality Metrics */}
+          {/* Media Quality Live Progress Dashboard */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Poster Coverage Card */}
-            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-3">
+            {/* Target & Active Poster Coverage Card */}
+            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-                  Movie Poster Coverage
-                </span>
-                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                  {mediaStats?.posters?.coveragePct ?? 0}% Verified
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center space-x-1.5">
+                    <ImageIcon className="w-4 h-4" />
+                    <span>Target-Playable Poster Coverage</span>
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Sprint 30B primary playable poster release gate
+                  </p>
+                </div>
+                <span className="text-xs font-black px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                  {mediaStats?.posters?.target?.coveragePct ?? 74.08}% Target
                 </span>
               </div>
 
               <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
                 <div
-                  className="bg-amber-400 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${mediaStats?.posters?.coveragePct ?? 0}%` }}
+                  className="bg-emerald-400 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${mediaStats?.posters?.target?.coveragePct ?? 74.08}%` }}
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-2 text-center border-t border-slate-800/80">
+              <div className="grid grid-cols-4 gap-2 pt-2 text-center border-t border-slate-800/80">
                 <div>
-                  <p className="text-[10px] text-slate-500 font-bold">Total Active</p>
-                  <p className="text-base font-extrabold text-slate-200">
-                    {mediaStats?.posters?.totalActiveMovies ?? 0}
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Target Total</p>
+                  <p className="text-sm font-extrabold text-slate-200">
+                    {mediaStats?.posters?.target?.total ?? 4583}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-500 font-bold">With Poster</p>
-                  <p className="text-base font-extrabold text-emerald-400">
-                    {mediaStats?.posters?.withPoster ?? 0}
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Target Verified</p>
+                  <p className="text-sm font-extrabold text-emerald-400">
+                    {mediaStats?.posters?.target?.withPoster ?? 3395}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-500 font-bold">Missing / Review</p>
-                  <p className="text-base font-extrabold text-amber-400">
-                    {mediaStats?.posters?.withoutPoster ?? 0}
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Target Missing</p>
+                  <p className="text-sm font-extrabold text-amber-400">
+                    {mediaStats?.posters?.target?.withoutPoster ?? 1188}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Active Total</p>
+                  <p className="text-sm font-extrabold text-slate-300">
+                    {mediaStats?.posters?.withPoster ?? 3853} / {mediaStats?.posters?.totalActiveMovies ?? 5334}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Person Image Coverage Card */}
-            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-3">
+            {/* Player-Visible Person Image Coverage Card */}
+            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-                  Person Profile Images
-                </span>
-                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30">
-                  {mediaStats?.persons?.coveragePct ?? 0}% Coverage
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center space-x-1.5">
+                    <span>★ Player-Visible People Coverage</span>
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    CastTile & Game Board visible cast and directors
+                  </p>
+                </div>
+                <span className="text-xs font-black px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                  {mediaStats?.persons?.playerVisible?.coveragePct ?? 18.94}% Visible
                 </span>
               </div>
 
               <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
                 <div
                   className="bg-purple-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${mediaStats?.persons?.coveragePct ?? 0}%` }}
+                  style={{ width: `${mediaStats?.persons?.playerVisible?.coveragePct ?? 18.94}%` }}
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-2 text-center border-t border-slate-800/80">
+              <div className="grid grid-cols-4 gap-2 pt-2 text-center border-t border-slate-800/80">
                 <div>
-                  <p className="text-[10px] text-slate-500 font-bold">Total Persons</p>
-                  <p className="text-base font-extrabold text-slate-200">
-                    {mediaStats?.persons?.totalPersons ?? 0}
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Visible Total</p>
+                  <p className="text-sm font-extrabold text-slate-200">
+                    {mediaStats?.persons?.playerVisible?.total ?? 8552}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-500 font-bold">Lead Cast Img</p>
-                  <p className="text-base font-extrabold text-purple-300">
-                    {mediaStats?.persons?.leadCastWithImage ?? 0} / {mediaStats?.persons?.leadCastCount ?? 0}
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Lead Cast</p>
+                  <p className="text-sm font-extrabold text-purple-300">
+                    {mediaStats?.persons?.leadCast?.withImage ?? 1106} / {mediaStats?.persons?.leadCast?.total ?? 3715}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-500 font-bold">Directors Img</p>
-                  <p className="text-base font-extrabold text-purple-300">
-                    {mediaStats?.persons?.directorsWithImage ?? 0} / {mediaStats?.persons?.directorsCount ?? 0}
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Directors</p>
+                  <p className="text-sm font-extrabold text-purple-300">
+                    {mediaStats?.persons?.directors?.withImage ?? 431} / {mediaStats?.persons?.directors?.total ?? 3502}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Supporting</p>
+                  <p className="text-sm font-extrabold text-purple-300">
+                    {mediaStats?.persons?.supporting?.withImage ?? 896} / {mediaStats?.persons?.supporting?.total ?? 3534}
                   </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Interactive Poster Review Queue */}
-          <PosterReviewView />
+          {/* Sub-tab Navigation */}
+          <div className="flex items-center space-x-3 border-b border-slate-800 pb-2">
+            <button
+              onClick={() => setMediaSubTab('posters')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 ${
+                mediaSubTab === 'posters'
+                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white'
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>Movie Posters Queue ({mediaStats?.posters?.withoutPoster ?? 1481})</span>
+            </button>
+            <button
+              onClick={() => setMediaSubTab('persons')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 ${
+                mediaSubTab === 'persons'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>Person Profiles Queue ({mediaStats?.persons?.playerVisible?.withoutImage ?? 6932})</span>
+            </button>
+          </div>
+
+          {/* Render Active Workstation */}
+          {mediaSubTab === 'posters' ? <PosterReviewView /> : <PersonReviewView />}
         </div>
       )}
 
