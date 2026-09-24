@@ -9,7 +9,7 @@ export interface PersonEnrichmentOptions {
   skip?: number;
   personId?: string;
   targetOnly?: boolean;
-  roles?: ('DIRECTOR' | 'LEAD')[];
+  roles?: ('DIRECTOR' | 'LEAD' | 'SUPPORTING')[];
   concurrency?: number;
   recoverIdentity?: boolean;
   onProgress?: (progress: {
@@ -202,6 +202,7 @@ export class PersonEnrichmentService {
         let matchCount = 0;
 
         for (const cand of candidates) {
+          const candNameMatch = cand.name.toLowerCase().trim() === person.canonicalName.toLowerCase().trim();
           const candContext = [
             cand.name,
             cand.known_for_department,
@@ -210,16 +211,37 @@ export class PersonEnrichmentService {
             .join(' ')
             .toLowerCase();
 
-          const hasFilmOverlap = knownMovies.some((km) => {
+          let hasFilmOverlap = knownMovies.some((km) => {
             const t = km.title.toLowerCase().replace(/[^a-z0-9]/g, '');
             const ot = (km.originalTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             const candNorm = candContext.replace(/[^a-z0-9]/g, '');
             return (t.length > 3 && candNorm.includes(t)) || (ot.length > 3 && candNorm.includes(ot));
           });
 
+          // Deep filmography check if candNameMatch and known_for didn't have overlap
+          if (!hasFilmOverlap && candNameMatch && tmdbAdapter.getPersonMovieCredits) {
+            try {
+              const credits = await tmdbAdapter.getPersonMovieCredits(cand.id);
+              const allCreditTitles = [
+                ...(credits.cast || []).map((c: any) => `${c.title || ''} ${c.original_title || ''}`),
+                ...(credits.crew || []).map((c: any) => `${c.title || ''} ${c.original_title || ''}`),
+              ]
+                .join(' ')
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, '');
+
+              hasFilmOverlap = knownMovies.some((km) => {
+                const t = km.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const ot = (km.originalTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                return (t.length > 3 && allCreditTitles.includes(t)) || (ot.length > 3 && allCreditTitles.includes(ot));
+              });
+            } catch {
+              // Ignore credit lookup failure
+            }
+          }
+
           const isSoloExact =
-            candidates.length === 1 &&
-            cand.name.toLowerCase().trim() === person.canonicalName.toLowerCase().trim();
+            candidates.length === 1 && candNameMatch;
 
           if (hasFilmOverlap || isSoloExact) {
             matchedCandidate = cand;
@@ -371,7 +393,7 @@ export class PersonEnrichmentService {
       where: candidateWhere,
       skip: options.skip,
       take: options.limit,
-      orderBy: { canonicalName: 'asc' },
+      orderBy: [{ tmdbId: 'desc' }, { canonicalName: 'asc' }],
       select: { id: true, canonicalName: true, tmdbId: true },
     });
 

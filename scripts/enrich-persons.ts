@@ -11,7 +11,7 @@ async function main() {
   const recoverIdentity = !noRecoverIdentity;
   const rolesArg = args.find((a) => a.startsWith('--roles='));
   const roles = rolesArg
-    ? (rolesArg.split('=')[1].split(',') as ('DIRECTOR' | 'LEAD')[])
+    ? (rolesArg.split('=')[1].split(',') as ('DIRECTOR' | 'LEAD' | 'SUPPORTING')[])
     : undefined;
   const limitArg = args.find((a) => a.startsWith('--limit='));
   const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : undefined;

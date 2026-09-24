@@ -528,6 +528,20 @@ export class TmdbAdapter implements MovieDataSource {
       return { results: [] };
     }
   }
+
+  async getPersonMovieCredits(personId: string | number): Promise<{ cast: any[]; crew: any[] }> {
+    if (!this.apiKey && !this.token) {
+      return { cast: [], crew: [] };
+    }
+    try {
+      const url = this.getUrl(`/person/${personId}/movie_credits`);
+      const res = await this.fetchWithRetry(url);
+      if (!res.ok) return { cast: [], crew: [] };
+      return res.json();
+    } catch {
+      return { cast: [], crew: [] };
+    }
+  }
 }
 
 export const tmdbAdapter = new TmdbAdapter();
